@@ -2,6 +2,7 @@ import { buildMockDashboard } from './mockData';
 import type {
   AuthSession,
   AuthUser,
+  BillingCheckoutSession,
   BillingPlan,
   DashboardData,
   OnboardingPayload,
@@ -84,6 +85,16 @@ type BillingPlanApiResponse = Array<{
   features: string[];
 }>;
 
+type BillingCheckoutApiResponse = {
+  session_id: string;
+  provider: string;
+  plan_id: PlanId;
+  status: string;
+  checkout_url: string | null;
+  created_at?: string;
+  completed_at?: string | null;
+};
+
 export async function signUp(payload: {
   fullName: string;
   email: string;
@@ -137,8 +148,8 @@ export async function fetchPlans(): Promise<BillingPlan[]> {
 }
 
 
-export async function checkoutPlan(sessionToken: string, planId: PlanId): Promise<AuthUser> {
-  const data = await fetchJson<UserApiResponse>(`${API_BASE_URL}/api/billing/checkout`, {
+export async function startBillingCheckout(sessionToken: string, planId: PlanId): Promise<BillingCheckoutSession> {
+  const data = await fetchJson<BillingCheckoutApiResponse>(`${API_BASE_URL}/api/billing/checkout`, {
     method: 'POST',
     headers: {
       ...withSessionToken(sessionToken),
@@ -146,7 +157,21 @@ export async function checkoutPlan(sessionToken: string, planId: PlanId): Promis
     },
     body: JSON.stringify({ plan_id: planId }),
   });
-  return mapUser(data);
+  return mapBillingCheckoutSession(data);
+}
+
+
+export async function fetchBillingCheckoutSession(
+  sessionToken: string,
+  checkoutSessionId: string,
+): Promise<BillingCheckoutSession> {
+  const data = await fetchJson<BillingCheckoutApiResponse>(
+    `${API_BASE_URL}/api/billing/checkout-sessions/${checkoutSessionId}`,
+    {
+      headers: withSessionToken(sessionToken),
+    },
+  );
+  return mapBillingCheckoutSession(data);
 }
 
 
@@ -392,6 +417,19 @@ function mapPlan(data: BillingPlanApiResponse[number]): BillingPlan {
     priceMonthlyKrw: data.price_monthly_krw,
     description: data.description,
     features: data.features,
+  };
+}
+
+
+function mapBillingCheckoutSession(data: BillingCheckoutApiResponse): BillingCheckoutSession {
+  return {
+    sessionId: data.session_id,
+    provider: data.provider,
+    planId: data.plan_id,
+    status: data.status,
+    checkoutUrl: data.checkout_url,
+    createdAt: data.created_at ? new Date(data.created_at).toLocaleString('ko-KR') : null,
+    completedAt: data.completed_at ? new Date(data.completed_at).toLocaleString('ko-KR') : null,
   };
 }
 

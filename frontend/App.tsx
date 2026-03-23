@@ -2,13 +2,13 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { startTransition, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   API_BASE_URL,
   ApiError,
-  checkoutPlan,
+  fetchBillingCheckoutSession,
   fetchBusinessProfile,
   fetchCurrentUser,
   fetchLatestBusinessProfile,
@@ -18,6 +18,7 @@ import {
   logout,
   saveBusinessProfile,
   signUp,
+  startBillingCheckout,
 } from './src/api';
 import { AccountScreen } from './src/components/AccountScreen';
 import { AuthScreen } from './src/components/AuthScreen';
@@ -41,6 +42,7 @@ import {
 } from './src/storage';
 import type {
   AuthUser,
+  BillingCheckoutSession,
   BillingPlan,
   DashboardData,
   OnboardingFormState,
@@ -76,6 +78,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [checkoutSession, setCheckoutSession] = useState<BillingCheckoutSession | null>(null);
   const [form, setForm] = useState<OnboardingFormState>(defaultFormState);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData>(() =>
@@ -105,6 +108,7 @@ export default function App() {
       const currentUser = await fetchCurrentUser(storedSession.sessionToken);
       setSessionToken(storedSession.sessionToken);
       setUser(currentUser);
+      setCheckoutSession(null);
       await saveAuthSession({ sessionToken: storedSession.sessionToken, user: currentUser });
 
       const local = await readLocalProfile();
@@ -140,6 +144,7 @@ export default function App() {
       await clearAuthSession();
       setSessionToken(null);
       setUser(null);
+      setCheckoutSession(null);
       setNotice('Your session could not be restored. Please log in again.');
       setScreen('auth');
     }
@@ -175,6 +180,7 @@ export default function App() {
       await saveAuthSession(session);
       setSessionToken(session.sessionToken);
       setUser(session.user);
+      setCheckoutSession(null);
       setAuthPassword('');
       setNotice(authMode === 'signup' ? 'Account created. Continue with the business profile.' : 'Logged in successfully.');
       setScreen('onboarding');
@@ -235,18 +241,76 @@ export default function App() {
     if (!sessionToken || !user) {
       return;
     }
+    if (planId === user.planId) {
+      setNotice(`The ${planId.toUpperCase()} plan is already active.`);
+      return;
+    }
+    if (checkoutSession?.status === 'pending') {
+      setNotice('Complete or cancel the current checkout before starting another plan change.');
+      return;
+    }
 
     setBillingLoading(true);
     try {
-      const updatedUser = await checkoutPlan(sessionToken, planId);
-      setUser(updatedUser);
-      await saveAuthSession({ sessionToken, user: updatedUser });
-      setNotice(`Plan updated to ${updatedUser.planId.toUpperCase()}.`);
+      const nextCheckoutSession = await startBillingCheckout(sessionToken, planId);
+      setCheckoutSession(nextCheckoutSession);
+      setNotice(
+        `Checkout ready for ${nextCheckoutSession.planId.toUpperCase()}. Open the mock checkout page, complete it, then refresh the status here.`,
+      );
     } catch (error) {
       setNotice(error instanceof ApiError ? error.message : 'Plan change could not be completed.');
     } finally {
       setBillingLoading(false);
     }
+  }
+
+  async function handleOpenCheckout() {
+    if (!checkoutSession?.checkoutUrl) {
+      setNotice('No checkout URL is available for this session.');
+      return;
+    }
+
+    try {
+      await Linking.openURL(checkoutSession.checkoutUrl);
+    } catch {
+      setNotice('The checkout page could not be opened on this device.');
+    }
+  }
+
+  async function handleRefreshCheckout() {
+    if (!sessionToken || !checkoutSession) {
+      return;
+    }
+
+    setBillingLoading(true);
+    try {
+      const refreshedSession = await fetchBillingCheckoutSession(sessionToken, checkoutSession.sessionId);
+      setCheckoutSession(refreshedSession);
+
+      if (refreshedSession.status === 'completed') {
+        const refreshedUser = await fetchCurrentUser(sessionToken);
+        setUser(refreshedUser);
+        await saveAuthSession({ sessionToken, user: refreshedUser });
+        setNotice(`Plan updated to ${refreshedUser.planId.toUpperCase()}.`);
+        return;
+      }
+
+      if (refreshedSession.status === 'pending') {
+        setNotice('Checkout is still pending. Finish it in the mock billing tab, then refresh again.');
+        return;
+      }
+
+      setNotice(`Checkout ${refreshedSession.status}. Your current plan stays ${user?.planId.toUpperCase()}.`);
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : 'Checkout status could not be refreshed.');
+    } finally {
+      setBillingLoading(false);
+    }
+  }
+
+  function handleClearCheckout() {
+    setCheckoutSession(null);
+    setNotice('Checkout status was cleared from the account view.');
   }
 
   async function handleLogout() {
@@ -263,6 +327,7 @@ export default function App() {
     startTransition(() => {
       setSessionToken(null);
       setUser(null);
+      setCheckoutSession(null);
       setProfileId(null);
       setForm(defaultFormState);
       setDashboard(buildMockDashboard(defaultOnboardingPayload, API_BASE_URL));
@@ -274,6 +339,7 @@ export default function App() {
   async function handleReset() {
     await clearLocalProfile();
     startTransition(() => {
+      setCheckoutSession(null);
       setProfileId(null);
       setForm(defaultFormState);
       setDashboard(buildMockDashboard(defaultOnboardingPayload, API_BASE_URL));
@@ -353,8 +419,12 @@ export default function App() {
               plans={plans}
               notice={notice}
               billingLoading={billingLoading}
+              checkoutSession={checkoutSession}
               onBack={handleAccountBack}
               onSelectPlan={handlePlanSelect}
+              onOpenCheckout={handleOpenCheckout}
+              onRefreshCheckout={handleRefreshCheckout}
+              onClearCheckout={handleClearCheckout}
               onLogout={handleLogout}
             />
           ) : screen === 'dashboard' && user ? (

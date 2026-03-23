@@ -6,7 +6,13 @@ from uuid import uuid4
 from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
-from app.db_models import BusinessProfileRecord, RecommendationHistoryRecord, SessionTokenRecord, UserRecord
+from app.db_models import (
+    BillingCheckoutSessionRecord,
+    BusinessProfileRecord,
+    RecommendationHistoryRecord,
+    SessionTokenRecord,
+    UserRecord,
+)
 from app.models import (
     ActionCard,
     DailyActionResponse,
@@ -157,6 +163,7 @@ def list_recommendations(
 
 
 def clear_database(session: Session) -> None:
+    session.execute(delete(BillingCheckoutSessionRecord))
     session.execute(delete(RecommendationHistoryRecord))
     session.execute(delete(BusinessProfileRecord))
     session.execute(delete(SessionTokenRecord))

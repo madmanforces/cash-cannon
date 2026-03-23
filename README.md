@@ -70,6 +70,7 @@ Expo will open a browser window or print a local web URL in the terminal.
 2. Create an account or log in.
 3. Fill in the onboarding form and save the business profile.
 4. Open the dashboard and use the `Account` button to switch plans.
+5. When you choose a paid plan, open the mock checkout page, approve the payment, then return to the account screen and press `Refresh Status`.
 
 ### Current plan limits
 
@@ -116,6 +117,11 @@ MONEY
 - `POST /api/auth/logout`
 - `GET /api/billing/plans`
 - `POST /api/billing/checkout`
+- `GET /api/billing/checkout-sessions/{session_id}`
+- `POST /api/billing/webhooks/mock`
+- `GET /api/billing/mock/checkout/{session_id}`
+- `POST /api/billing/mock/checkout/{session_id}/complete`
+- `POST /api/billing/mock/checkout/{session_id}/cancel`
 - `POST /api/actions/today`
 - `POST /api/calculator/margin`
 - `POST /api/ai/copy`
@@ -138,6 +144,7 @@ MONEY
 - margin summary panel
 - copy studio preview
 - account screen with plan selection and logout
+- mock checkout session card with open/refresh flow
 - edit/reset flow for the saved profile
 - live API fetch with demo fallback
 

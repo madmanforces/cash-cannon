@@ -147,3 +147,26 @@ class BillingPlanResponse(BaseModel):
 
 class BillingCheckoutRequest(BaseModel):
     plan_id: str
+
+
+class BillingCheckoutResponse(BaseModel):
+    session_id: str
+    provider: str
+    plan_id: str
+    status: str
+    checkout_url: str | None = None
+
+
+class BillingSessionResponse(BaseModel):
+    session_id: str
+    provider: str
+    plan_id: str
+    status: str
+    checkout_url: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class BillingWebhookRequest(BaseModel):
+    session_id: str
+    event_type: str

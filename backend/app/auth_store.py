@@ -64,6 +64,13 @@ def revoke_session(session: Session, token: str | None) -> None:
 
 
 def update_user_plan(session: Session, user: UserRecord, plan_id: str) -> UserResponse:
+    _apply_plan_to_user(user, plan_id)
+    session.commit()
+    session.refresh(user)
+    return _to_user_response(user)
+
+
+def _apply_plan_to_user(user: UserRecord, plan_id: str) -> None:
     plan = get_plan(plan_id)
     if plan is None:
         raise ValueError("Unknown plan")
@@ -72,9 +79,6 @@ def update_user_plan(session: Session, user: UserRecord, plan_id: str) -> UserRe
     user.billing_status = "active"
     user.renewal_date = None if plan.id == "free" else datetime.now(timezone.utc) + timedelta(days=30)
     user.updated_at = datetime.now(timezone.utc)
-    session.commit()
-    session.refresh(user)
-    return _to_user_response(user)
 
 
 def _create_session_token(session: Session, user_id: int) -> str:

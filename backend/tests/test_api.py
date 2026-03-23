@@ -68,6 +68,82 @@ def test_billing_checkout():
     assert len(plans_response.json()) >= 3
     assert checkout_response.status_code == 200
     assert checkout_response.json()["plan_id"] == "pro"
+    assert checkout_response.json()["status"] == "pending"
+    assert checkout_response.json()["provider"] == "mock"
+    assert checkout_response.json()["checkout_url"].endswith(
+        f"/api/billing/mock/checkout/{checkout_response.json()['session_id']}"
+    )
+
+
+def test_mock_checkout_completion_updates_plan():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Plan Buyer",
+            "email": "buyer@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
+    checkout_response = client.post(
+        "/api/billing/checkout",
+        json={"plan_id": "pro"},
+        headers={"X-Session-Token": token},
+    )
+    session_id = checkout_response.json()["session_id"]
+
+    session_response = client.get(
+        f"/api/billing/checkout-sessions/{session_id}",
+        headers={"X-Session-Token": token},
+    )
+    webhook_response = client.post(
+        "/api/billing/webhooks/mock",
+        json={"session_id": session_id, "event_type": "checkout.session.completed"},
+    )
+    me_response = client.get("/api/auth/me", headers={"X-Session-Token": token})
+
+    assert session_response.status_code == 200
+    assert session_response.json()["status"] == "pending"
+    assert webhook_response.status_code == 200
+    assert webhook_response.json()["status"] == "completed"
+    assert me_response.status_code == 200
+    assert me_response.json()["plan_id"] == "pro"
+
+
+def test_checkout_session_is_scoped_to_owner():
+    owner_signup = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Owner A",
+            "email": "checkouta@example.com",
+            "password": "supersecure123",
+        },
+    )
+    intruder_signup = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Owner B",
+            "email": "checkoutb@example.com",
+            "password": "supersecure123",
+        },
+    )
+    owner_token = owner_signup.json()["session_token"]
+    intruder_token = intruder_signup.json()["session_token"]
+
+    checkout_response = client.post(
+        "/api/billing/checkout",
+        json={"plan_id": "team"},
+        headers={"X-Session-Token": owner_token},
+    )
+
+    session_id = checkout_response.json()["session_id"]
+    forbidden_response = client.get(
+        f"/api/billing/checkout-sessions/{session_id}",
+        headers={"X-Session-Token": intruder_token},
+    )
+
+    assert forbidden_response.status_code == 404
 
 
 def test_free_plan_profile_limit():

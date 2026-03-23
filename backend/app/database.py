@@ -19,7 +19,13 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 
 def init_db() -> None:
-    from app.db_models import BusinessProfileRecord, RecommendationHistoryRecord, SessionTokenRecord, UserRecord  # noqa: F401
+    from app.db_models import (  # noqa: F401
+        BillingCheckoutSessionRecord,
+        BusinessProfileRecord,
+        RecommendationHistoryRecord,
+        SessionTokenRecord,
+        UserRecord,
+    )
 
     Base.metadata.create_all(bind=engine)
     _run_lightweight_migrations()

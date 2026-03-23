@@ -73,6 +73,10 @@ class UserRecord(Base):
         cascade="all, delete-orphan",
     )
     profiles: Mapped[list[BusinessProfileRecord]] = relationship(back_populates="owner")
+    billing_sessions: Mapped[list["BillingCheckoutSessionRecord"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class SessionTokenRecord(Base):
@@ -85,3 +89,19 @@ class SessionTokenRecord(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     user: Mapped[UserRecord] = relationship(back_populates="sessions")
+
+
+class BillingCheckoutSessionRecord(Base):
+    __tablename__ = "billing_checkout_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    plan_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    checkout_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    user: Mapped[UserRecord] = relationship(back_populates="billing_sessions")

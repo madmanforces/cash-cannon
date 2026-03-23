@@ -1,14 +1,18 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import type { AuthUser, BillingPlan, PlanId } from '../types';
+import type { AuthUser, BillingCheckoutSession, BillingPlan, PlanId } from '../types';
 
 type AccountScreenProps = {
   user: AuthUser;
   plans: BillingPlan[];
   notice: string | null;
   billingLoading: boolean;
+  checkoutSession: BillingCheckoutSession | null;
   onBack: () => void;
   onSelectPlan: (planId: PlanId) => void;
+  onOpenCheckout: () => void;
+  onRefreshCheckout: () => void;
+  onClearCheckout: () => void;
   onLogout: () => void;
 };
 
@@ -17,10 +21,16 @@ export function AccountScreen({
   plans,
   notice,
   billingLoading,
+  checkoutSession,
   onBack,
   onSelectPlan,
+  onOpenCheckout,
+  onRefreshCheckout,
+  onClearCheckout,
   onLogout,
 }: AccountScreenProps) {
+  const hasPendingCheckout = checkoutSession?.status === 'pending';
+
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.hero}>
@@ -34,10 +44,40 @@ export function AccountScreen({
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       </View>
 
+      {checkoutSession ? (
+        <View style={styles.checkoutPanel}>
+          <Text style={styles.checkoutTitle}>Checkout Session</Text>
+          <Text style={styles.checkoutLine}>
+            {checkoutSession.planId.toUpperCase()} via {checkoutSession.provider}
+          </Text>
+          <Text style={styles.checkoutLine}>Status: {checkoutSession.status}</Text>
+          {checkoutSession.createdAt ? <Text style={styles.checkoutMeta}>Created: {checkoutSession.createdAt}</Text> : null}
+          {checkoutSession.completedAt ? (
+            <Text style={styles.checkoutMeta}>Completed: {checkoutSession.completedAt}</Text>
+          ) : null}
+          <View style={styles.checkoutActionRow}>
+            {checkoutSession.checkoutUrl && checkoutSession.status === 'pending' ? (
+              <Pressable onPress={onOpenCheckout} style={[styles.checkoutButton, styles.checkoutPrimary]}>
+                <Text style={[styles.checkoutButtonText, styles.checkoutPrimaryText]}>Open Checkout</Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={onRefreshCheckout} style={[styles.checkoutButton, styles.checkoutSecondary]}>
+              <Text style={[styles.checkoutButtonText, styles.checkoutSecondaryText]}>Refresh Status</Text>
+            </Pressable>
+            {checkoutSession.status !== 'pending' ? (
+              <Pressable onPress={onClearCheckout} style={[styles.checkoutButton, styles.checkoutGhost]}>
+                <Text style={[styles.checkoutButtonText, styles.checkoutGhostText]}>Dismiss</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.panel}>
         <Text style={styles.sectionTitle}>Plans</Text>
         {plans.map((plan) => {
           const selected = plan.id === user.planId;
+          const pendingForPlan = checkoutSession?.status === 'pending' && checkoutSession.planId === plan.id;
           return (
             <View key={plan.id} style={[styles.planCard, selected ? styles.planCardSelected : undefined]}>
               <View style={styles.planHeader}>
@@ -50,10 +90,10 @@ export function AccountScreen({
                 <Pressable
                   onPress={() => onSelectPlan(plan.id)}
                   style={[styles.planButton, selected ? styles.planButtonSelected : styles.planButtonIdle]}
-                  disabled={billingLoading}
+                  disabled={billingLoading || selected || hasPendingCheckout}
                 >
                   <Text style={[styles.planButtonText, selected ? styles.planButtonTextSelected : styles.planButtonTextIdle]}>
-                    {billingLoading ? '...' : selected ? 'Current' : 'Choose'}
+                    {billingLoading ? '...' : selected ? 'Current' : pendingForPlan ? 'Pending' : 'Choose'}
                   </Text>
                 </Pressable>
               </View>
@@ -142,6 +182,60 @@ const styles = StyleSheet.create({
     color: '#ffbe9f',
     lineHeight: 20,
     fontFamily: 'SpaceGrotesk_500Medium',
+  },
+  checkoutPanel: {
+    borderRadius: 24,
+    padding: 18,
+    backgroundColor: 'rgba(155, 243, 208, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(155, 243, 208, 0.18)',
+  },
+  checkoutTitle: {
+    color: '#f6efe2',
+    fontSize: 22,
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  checkoutLine: {
+    marginTop: 10,
+    color: '#f6efe2',
+    fontFamily: 'SpaceGrotesk_500Medium',
+  },
+  checkoutMeta: {
+    marginTop: 6,
+    color: '#d5dfeb',
+    fontFamily: 'SpaceGrotesk_500Medium',
+  },
+  checkoutActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 16,
+  },
+  checkoutButton: {
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  checkoutPrimary: {
+    backgroundColor: '#ff8e63',
+  },
+  checkoutSecondary: {
+    backgroundColor: '#f7f1e8',
+  },
+  checkoutGhost: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  checkoutButtonText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  checkoutPrimaryText: {
+    color: '#07111f',
+  },
+  checkoutSecondaryText: {
+    color: '#07111f',
+  },
+  checkoutGhostText: {
+    color: '#f6efe2',
   },
   panel: {
     borderRadius: 24,

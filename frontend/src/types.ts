@@ -112,3 +112,15 @@ export type BillingPlan = {
   description: string;
   features: string[];
 };
+
+export type BillingCheckoutStatus = 'pending' | 'completed' | 'canceled' | 'expired';
+
+export type BillingCheckoutSession = {
+  sessionId: string;
+  provider: string;
+  planId: PlanId;
+  status: BillingCheckoutStatus | string;
+  checkoutUrl: string | null;
+  createdAt: string | null;
+  completedAt: string | null;
+};
