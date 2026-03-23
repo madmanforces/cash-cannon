@@ -13,7 +13,14 @@ export async function saveLocalProfile(payload: OnboardingPayload, profileId: st
 
 export async function readLocalProfile() {
   const [[, payloadRaw], [, profileIdRaw]] = await AsyncStorage.multiGet([PAYLOAD_KEY, PROFILE_ID_KEY]);
-  const payload = payloadRaw ? (JSON.parse(payloadRaw) as OnboardingPayload) : null;
+  let payload: OnboardingPayload | null = null;
+  if (payloadRaw) {
+    try {
+      payload = JSON.parse(payloadRaw) as OnboardingPayload;
+    } catch {
+      payload = null;
+    }
+  }
   const profileId = profileIdRaw || null;
 
   return { payload, profileId };

@@ -2,8 +2,8 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { startTransition, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { API_BASE_URL, fetchBusinessProfile, loadDashboard, saveBusinessProfile } from './src/api';
 import { DashboardScreen } from './src/components/DashboardScreen';
@@ -21,7 +21,7 @@ import type { DashboardData, OnboardingFormState, SalesChannel } from './src/typ
 type Screen = 'booting' | 'onboarding' | 'dashboard';
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  useFonts({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
   });
@@ -41,26 +41,31 @@ export default function App() {
   }, []);
 
   async function bootstrap() {
-    const local = await readLocalProfile();
+    try {
+      const local = await readLocalProfile();
 
-    if (!local.payload) {
-      setScreen('onboarding');
-      return;
-    }
-
-    let payload = local.payload;
-    if (local.profileId) {
-      const remote = await fetchBusinessProfile(local.profileId);
-      if (remote) {
-        payload = remote;
+      if (!local.payload) {
+        setScreen('onboarding');
+        return;
       }
-    }
 
-    setForm(payloadToFormState(payload));
-    setProfileId(local.profileId);
-    await hydrateDashboard(payload, local.profileId);
-    setNotice(local.profileId ? 'Loaded the last saved business profile.' : 'Loaded the local draft profile.');
-    setScreen('dashboard');
+      let payload = local.payload;
+      if (local.profileId) {
+        const remote = await fetchBusinessProfile(local.profileId);
+        if (remote) {
+          payload = remote;
+        }
+      }
+
+      setForm(payloadToFormState(payload));
+      setProfileId(local.profileId);
+      await hydrateDashboard(payload, local.profileId);
+      setNotice(local.profileId ? 'Loaded the last saved business profile.' : 'Loaded the local draft profile.');
+      setScreen('dashboard');
+    } catch {
+      setNotice('Could not restore saved data, so a fresh onboarding session was opened.');
+      setScreen('onboarding');
+    }
   }
 
   async function hydrateDashboard(payload = defaultOnboardingPayload, nextProfileId: string | null = profileId) {
@@ -139,45 +144,50 @@ export default function App() {
     });
   }
 
-  if (!fontsLoaded || screen === 'booting') {
+  if (screen === 'booting') {
     return (
-      <LinearGradient colors={['#07111f', '#102543', '#18335b']} style={styles.shell}>
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.bootWrap}>
-            <ActivityIndicator color="#ff8e63" />
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+      <SafeAreaProvider>
+        <LinearGradient colors={['#07111f', '#102543', '#18335b']} style={styles.shell}>
+          <SafeAreaView style={styles.safeArea}>
+            <View style={styles.bootWrap}>
+              <ActivityIndicator color="#ff8e63" />
+              <Text style={styles.bootText}>Loading MONEY BIZ workspace...</Text>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <LinearGradient colors={['#07111f', '#102543', '#18335b']} style={styles.shell}>
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="light" />
-        {screen === 'dashboard' ? (
-          <DashboardScreen
-            dashboard={dashboard}
-            loading={loadingDashboard}
-            refreshing={refreshing}
-            notice={notice}
-            onRefresh={handleRefresh}
-            onEdit={handleEdit}
-            onReset={handleReset}
-          />
-        ) : (
-          <OnboardingScreen
-            form={form}
-            notice={notice}
-            saving={saving}
-            hasSavedProfile={Boolean(profileId)}
-            onChange={updateField}
-            onToggleChannel={toggleChannel}
-            onSubmit={handleSave}
-          />
-        )}
-      </SafeAreaView>
-    </LinearGradient>
+    <SafeAreaProvider>
+      <LinearGradient colors={['#07111f', '#102543', '#18335b']} style={styles.shell}>
+        <SafeAreaView style={styles.safeArea}>
+          <StatusBar style="light" />
+          {screen === 'dashboard' ? (
+            <DashboardScreen
+              dashboard={dashboard}
+              loading={loadingDashboard}
+              refreshing={refreshing}
+              notice={notice}
+              onRefresh={handleRefresh}
+              onEdit={handleEdit}
+              onReset={handleReset}
+            />
+          ) : (
+            <OnboardingScreen
+              form={form}
+              notice={notice}
+              saving={saving}
+              hasSavedProfile={Boolean(profileId)}
+              onChange={updateField}
+              onToggleChannel={toggleChannel}
+              onSubmit={handleSave}
+            />
+          )}
+        </SafeAreaView>
+      </LinearGradient>
+    </SafeAreaProvider>
   );
 }
 
@@ -192,5 +202,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bootText: {
+    marginTop: 14,
+    color: '#f6efe2',
+    fontSize: 16,
+    fontFamily: 'SpaceGrotesk_500Medium',
   },
 });
