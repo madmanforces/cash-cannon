@@ -20,6 +20,21 @@ def test_healthcheck():
     assert response.json() == {"status": "ok"}
 
 
+def test_cors_preflight_for_signup():
+    response = client.options(
+        "/api/auth/signup",
+        headers={
+            "Origin": "http://localhost:8081",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-session-token",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:8081"
+    assert "POST" in response.headers["access-control-allow-methods"]
+
+
 def test_signup_login_and_me():
     signup_response = client.post(
         "/api/auth/signup",

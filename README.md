@@ -43,6 +43,13 @@ Default API target:
 EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```
 
+Backend CORS:
+
+```text
+Local browser origins such as http://localhost:8081 and http://127.0.0.1:8081 are allowed by default.
+You can add extra origins with CORS_ALLOW_ORIGINS=http://example.com,http://another-host:3000
+```
+
 ## How To View It
 
 ### API docs

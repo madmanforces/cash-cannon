@@ -1,7 +1,9 @@
+import os
 import secrets
 from html import escape
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -49,12 +51,28 @@ from app.store import (
     update_profile,
 )
 
+
+def _get_cors_allow_origins() -> list[str]:
+    configured = os.getenv("CORS_ALLOW_ORIGINS", "")
+    values = [origin.strip() for origin in configured.split(",")]
+    return [origin for origin in values if origin]
+
+
 init_db()
 
 app = FastAPI(
     title="MONEY BIZ API",
     version="0.2.0",
     description="MVP API for the MONEY BIZ revenue action coach.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_get_cors_allow_origins(),
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
