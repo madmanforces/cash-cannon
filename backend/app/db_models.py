@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class BusinessProfileRecord(Base):
+    __tablename__ = "business_profiles"
+
+    profile_id: Mapped[str] = mapped_column(String(12), primary_key=True)
+    business_name: Mapped[str] = mapped_column(String(60), nullable=False)
+    business_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    channels: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    monthly_goal: Mapped[int] = mapped_column(Integer, nullable=False)
+    average_order_value: Mapped[int] = mapped_column(Integer, nullable=False)
+    repeat_customer_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    weekly_revenue: Mapped[int] = mapped_column(Integer, nullable=False)
+    weekly_orders: Mapped[int] = mapped_column(Integer, nullable=False)
+    ad_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    coupon_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    trend_delta: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    recommendations: Mapped[list["RecommendationHistoryRecord"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+    )
+
+
+class RecommendationHistoryRecord(Base):
+    __tablename__ = "recommendation_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[str] = mapped_column(
+        String(12),
+        ForeignKey("business_profiles.profile_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    focus: Mapped[str] = mapped_column(String(32), nullable=False)
+    actions: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    profile: Mapped[BusinessProfileRecord] = relationship(back_populates="recommendations")

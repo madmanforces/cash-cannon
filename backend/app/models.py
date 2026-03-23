@@ -103,3 +103,10 @@ class SavedProfileResponse(BaseModel):
     snapshot: SalesSnapshot
     created_at: datetime
     updated_at: datetime
+
+
+class RecommendationHistoryEntry(BaseModel):
+    id: int
+    focus: str
+    actions: list[ActionCard]
+    created_at: datetime

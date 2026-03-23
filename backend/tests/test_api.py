@@ -1,13 +1,16 @@
 from fastapi.testclient import TestClient
 
+from app.database import SessionLocal, init_db
 from app.main import app
-from app.store import clear_profiles
+from app.store import clear_database
 
 client = TestClient(app)
+init_db()
 
 
 def setup_function():
-    clear_profiles()
+    with SessionLocal() as session:
+        clear_database(session)
 
 
 def test_healthcheck():
@@ -122,6 +125,38 @@ def test_profile_update():
     assert update_response.status_code == 200
     assert update_response.json()["profile"]["monthly_goal"] == 4500000
     assert update_response.json()["snapshot"]["weekly_orders"] == 19
+
+
+def test_recommendation_history_for_saved_profile():
+    create_response = client.post(
+        "/api/business-profiles",
+        json={
+            "profile": {
+                "business_name": "Arcade Honey",
+                "business_type": "online_seller",
+                "channels": ["smart_store", "instagram"],
+                "monthly_goal": 3900000,
+                "average_order_value": 31000,
+                "repeat_customer_rate": 0.14,
+            },
+            "snapshot": {
+                "weekly_revenue": 720000,
+                "weekly_orders": 21,
+                "ad_cost": 60000,
+                "coupon_cost": 15000,
+                "trend_delta": -0.07,
+            },
+        },
+    )
+    profile_id = create_response.json()["profile_id"]
+
+    actions_response = client.post(f"/api/business-profiles/{profile_id}/actions/today")
+    history_response = client.get(f"/api/business-profiles/{profile_id}/recommendations?limit=3")
+
+    assert actions_response.status_code == 200
+    assert history_response.status_code == 200
+    assert len(history_response.json()) == 1
+    assert history_response.json()[0]["focus"] == "Recovery mode"
 
 
 def test_margin_calculator():

@@ -130,6 +130,24 @@ export function DashboardScreen({
         </View>
       </View>
 
+      {dashboard.history.length > 0 ? (
+        <View style={styles.historyPanel}>
+          <Text style={styles.panelKicker}>Recommendation History</Text>
+          <Text style={styles.panelTitle}>Each refresh writes a new recommendation snapshot to the database.</Text>
+          {dashboard.history.map((item) => (
+            <View key={item.id} style={styles.historyCard}>
+              <Text style={styles.historyFocus}>{item.focus}</Text>
+              <Text style={styles.historyTime}>{item.createdAt}</Text>
+              {item.actionTitles.slice(0, 2).map((title) => (
+                <Text key={`${item.id}-${title}`} style={styles.historyAction}>
+                  {title}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       <View style={styles.footerCard}>
         <Text style={styles.footerTitle}>Saved profile status</Text>
         <Text style={styles.footerCopy}>API base URL: {dashboard.apiBaseUrl}</Text>
@@ -417,6 +435,11 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#102543',
   },
+  historyPanel: {
+    borderRadius: 24,
+    padding: 20,
+    backgroundColor: '#f7f1e8',
+  },
   panelKicker: {
     color: '#9bf3d0',
     fontSize: 12,
@@ -470,6 +493,28 @@ const styles = StyleSheet.create({
     padding: 18,
     backgroundColor: 'rgba(255,255,255,0.08)',
     marginBottom: 10,
+  },
+  historyCard: {
+    marginTop: 16,
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: '#fff8ef',
+  },
+  historyFocus: {
+    color: '#07111f',
+    fontSize: 16,
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  historyTime: {
+    marginTop: 6,
+    color: '#7b5f55',
+    fontFamily: 'SpaceGrotesk_500Medium',
+  },
+  historyAction: {
+    marginTop: 8,
+    color: '#223042',
+    lineHeight: 20,
+    fontFamily: 'SpaceGrotesk_500Medium',
   },
   footerTitle: {
     color: '#f6efe2',

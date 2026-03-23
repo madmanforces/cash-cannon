@@ -58,14 +58,14 @@ export default function App() {
 
     setForm(payloadToFormState(payload));
     setProfileId(local.profileId);
-    await hydrateDashboard(payload);
+    await hydrateDashboard(payload, local.profileId);
     setNotice(local.profileId ? 'Loaded the last saved business profile.' : 'Loaded the local draft profile.');
     setScreen('dashboard');
   }
 
-  async function hydrateDashboard(payload = defaultOnboardingPayload) {
+  async function hydrateDashboard(payload = defaultOnboardingPayload, nextProfileId: string | null = profileId) {
     setLoadingDashboard(true);
-    const next = await loadDashboard(payload);
+    const next = await loadDashboard(payload, nextProfileId);
     startTransition(() => {
       setDashboard(next);
       setLoadingDashboard(false);
@@ -84,7 +84,7 @@ export default function App() {
     setSaving(true);
     const result = await saveBusinessProfile(payload, profileId);
     await saveLocalProfile(result.payload, result.profileId);
-    await hydrateDashboard(result.payload);
+    await hydrateDashboard(result.payload, result.profileId);
 
     startTransition(() => {
       setForm(payloadToFormState(result.payload));

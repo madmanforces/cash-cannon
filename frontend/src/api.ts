@@ -33,6 +33,15 @@ type CopyApiResponse = {
   }>;
 };
 
+type RecommendationHistoryApiResponse = Array<{
+  id: number;
+  focus: string;
+  created_at: string;
+  actions: Array<{
+    title: string;
+  }>;
+}>;
+
 export async function saveBusinessProfile(
   payload: OnboardingPayload,
   profileId: string | null,
@@ -76,15 +85,30 @@ export async function fetchBusinessProfile(profileId: string): Promise<Onboardin
   }
 }
 
-export async function loadDashboard(payload: OnboardingPayload): Promise<DashboardData> {
+export async function loadDashboard(
+  payload: OnboardingPayload,
+  profileId?: string | null,
+): Promise<DashboardData> {
   try {
-    const [health, actions, margin, copies] = await Promise.all([
+    const actionRequest = profileId
+      ? fetchJson<DashboardApiResponse>(`${API_BASE_URL}/api/business-profiles/${profileId}/actions/today`, {
+          method: 'POST',
+        })
+      : fetchJson<DashboardApiResponse>(`${API_BASE_URL}/api/actions/today`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+    const historyRequest = profileId
+      ? fetchJson<RecommendationHistoryApiResponse>(
+          `${API_BASE_URL}/api/business-profiles/${profileId}/recommendations?limit=4`,
+        )
+      : Promise.resolve([]);
+
+    const [health, actions, margin, copies, history] = await Promise.all([
       fetchJson<{ status: string }>(`${API_BASE_URL}/health`),
-      fetchJson<DashboardApiResponse>(`${API_BASE_URL}/api/actions/today`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }),
+      actionRequest,
       fetchJson<MarginApiResponse>(`${API_BASE_URL}/api/calculator/margin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -95,6 +119,7 @@ export async function loadDashboard(payload: OnboardingPayload): Promise<Dashboa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(createCopyInput(payload)),
       }),
+      historyRequest,
     ]);
 
     return {
@@ -116,6 +141,12 @@ export async function loadDashboard(payload: OnboardingPayload): Promise<Dashboa
         suggestedPrice: margin.suggested_price,
       },
       copies: copies.variants,
+      history: history.map((entry) => ({
+        id: entry.id,
+        focus: entry.focus,
+        createdAt: new Date(entry.created_at).toLocaleString('ko-KR'),
+        actionTitles: entry.actions.map((action) => action.title),
+      })),
       profile: {
         businessName: payload.profile.business_name,
         businessType: payload.profile.business_type,

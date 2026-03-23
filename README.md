@@ -33,13 +33,42 @@ Then run:
 ```powershell
 cd C:\Myworks\MONEY\frontend
 npm install
-npm start
+npm run web
 ```
 
 Default API target:
 
 ```text
 EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
+
+## How To View It
+
+### API docs
+
+Start the backend, then open:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### Frontend
+
+Start the frontend with:
+
+```powershell
+cd C:\Myworks\MONEY\frontend
+npm run web
+```
+
+Expo will open a browser window or print a local web URL in the terminal.
+
+### Local DB file
+
+After the backend starts, the local database file is created here by default:
+
+```text
+C:\Myworks\MONEY\money_biz.db
 ```
 
 ## Verification
@@ -74,6 +103,8 @@ MONEY
 - `POST /api/business-profiles`
 - `GET /api/business-profiles/{profile_id}`
 - `PUT /api/business-profiles/{profile_id}`
+- `POST /api/business-profiles/{profile_id}/actions/today`
+- `GET /api/business-profiles/{profile_id}/recommendations`
 - `GET /health`
 
 ### Frontend

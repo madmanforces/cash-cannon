@@ -113,6 +113,7 @@ export function buildMockDashboard(payload: OnboardingPayload, apiBaseUrl: strin
     actions: buildFallbackActions(payload),
     margin: buildFallbackMargin(payload),
     copies: buildFallbackCopy(payload),
+    history: [],
     profile: {
       businessName: payload.profile.business_name,
       businessType: payload.profile.business_type,

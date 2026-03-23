@@ -53,6 +53,13 @@ export type CopyVariant = {
   body: string;
 };
 
+export type RecommendationHistoryItem = {
+  id: number;
+  focus: string;
+  createdAt: string;
+  actionTitles: string[];
+};
+
 export type DashboardData = {
   source: 'api' | 'mock';
   apiHealth: string;
@@ -62,6 +69,7 @@ export type DashboardData = {
   actions: ActionCard[];
   margin: MarginSnapshot;
   copies: CopyVariant[];
+  history: RecommendationHistoryItem[];
   profile: {
     businessName: string;
     businessType: BusinessType;
