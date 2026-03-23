@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import delete, desc, select
 from sqlalchemy.orm import Session
 
-from app.db_models import BusinessProfileRecord, RecommendationHistoryRecord
+from app.db_models import BusinessProfileRecord, RecommendationHistoryRecord, SessionTokenRecord, UserRecord
 from app.models import (
     ActionCard,
     DailyActionResponse,
@@ -15,11 +15,15 @@ from app.models import (
     SavedProfileResponse,
 )
 
-
-def create_profile(session: Session, payload: OnboardingRequest) -> SavedProfileResponse:
+def create_profile(
+    session: Session,
+    payload: OnboardingRequest,
+    owner_user_id: int | None = None,
+) -> SavedProfileResponse:
     now = datetime.now(timezone.utc)
     record = BusinessProfileRecord(
         profile_id=uuid4().hex[:12],
+        owner_user_id=owner_user_id,
         business_name=payload.profile.business_name,
         business_type=payload.profile.business_type.value,
         channels=[channel.value for channel in payload.profile.channels],
@@ -40,10 +44,18 @@ def create_profile(session: Session, payload: OnboardingRequest) -> SavedProfile
     return _to_saved_profile(record)
 
 
-def update_profile(session: Session, profile_id: str, payload: OnboardingRequest) -> SavedProfileResponse | None:
+def update_profile(
+    session: Session,
+    profile_id: str,
+    payload: OnboardingRequest,
+    owner_user_id: int | None = None,
+) -> SavedProfileResponse | None:
     record = session.get(BusinessProfileRecord, profile_id)
     if record is None:
         return None
+
+    if record.owner_user_id is None and owner_user_id is not None:
+        record.owner_user_id = owner_user_id
 
     record.business_name = payload.profile.business_name
     record.business_type = payload.profile.business_type.value
@@ -60,6 +72,18 @@ def update_profile(session: Session, profile_id: str, payload: OnboardingRequest
 
     session.commit()
     session.refresh(record)
+    return _to_saved_profile(record)
+
+
+def get_latest_profile_for_user(session: Session, owner_user_id: int) -> SavedProfileResponse | None:
+    record = session.scalars(
+        select(BusinessProfileRecord)
+        .where(BusinessProfileRecord.owner_user_id == owner_user_id)
+        .order_by(desc(BusinessProfileRecord.updated_at), desc(BusinessProfileRecord.created_at))
+        .limit(1)
+    ).first()
+    if record is None:
+        return None
     return _to_saved_profile(record)
 
 
@@ -111,6 +135,8 @@ def list_recommendations(
 def clear_database(session: Session) -> None:
     session.execute(delete(RecommendationHistoryRecord))
     session.execute(delete(BusinessProfileRecord))
+    session.execute(delete(SessionTokenRecord))
+    session.execute(delete(UserRecord))
     session.commit()
 
 

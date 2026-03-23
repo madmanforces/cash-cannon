@@ -1,4 +1,4 @@
-import type { DashboardData, OnboardingFormState, OnboardingPayload, SalesChannel } from './types';
+import type { BillingPlan, DashboardData, OnboardingFormState, OnboardingPayload, SalesChannel } from './types';
 
 export const defaultOnboardingPayload: OnboardingPayload = {
   profile: {
@@ -19,6 +19,29 @@ export const defaultOnboardingPayload: OnboardingPayload = {
 };
 
 export const defaultFormState = payloadToFormState(defaultOnboardingPayload);
+export const defaultBillingPlans: BillingPlan[] = [
+  {
+    id: 'free',
+    name: 'Free',
+    priceMonthlyKrw: 0,
+    description: 'For solo operators testing the workflow.',
+    features: ['Single business profile', 'Basic dashboard access', 'Local save fallback'],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    priceMonthlyKrw: 19900,
+    description: 'For revenue-focused solo operators.',
+    features: ['Expanded action history', 'Higher usage limits', 'Priority access'],
+  },
+  {
+    id: 'team',
+    name: 'Team',
+    priceMonthlyKrw: 49000,
+    description: 'For small teams managing operators together.',
+    features: ['Shared use for small teams', 'Larger operating limits', 'Team-oriented workflow'],
+  },
+];
 
 export function payloadToFormState(payload: OnboardingPayload): OnboardingFormState {
   return {

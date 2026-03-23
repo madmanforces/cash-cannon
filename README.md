@@ -4,6 +4,7 @@ MONEY BIZ is an AI revenue action coach for solo operators and small businesses.
 The current prototype includes:
 
 - a FastAPI backend with action recommendation, margin calculator, and copy generation endpoints
+- a FastAPI backend with account, plan, and session APIs
 - an Expo mobile onboarding flow that saves the business profile locally and syncs it to the backend when available
 - an Expo mobile dashboard that consumes the saved profile and falls back to demo data when the API is unavailable
 - product strategy and monetization docs for the next build phases
@@ -63,6 +64,13 @@ npm run web
 
 Expo will open a browser window or print a local web URL in the terminal.
 
+### First-run flow
+
+1. Open the web app.
+2. Create an account or log in.
+3. Fill in the onboarding form and save the business profile.
+4. Open the dashboard and use the `Account` button to switch plans.
+
 ### Local DB file
 
 After the backend starts, the local database file is created here by default:
@@ -96,11 +104,18 @@ MONEY
 
 ### Backend
 
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `GET /api/billing/plans`
+- `POST /api/billing/checkout`
 - `POST /api/actions/today`
 - `POST /api/calculator/margin`
 - `POST /api/ai/copy`
 - `POST /api/onboarding/profile`
 - `POST /api/business-profiles`
+- `GET /api/business-profiles/me/latest`
 - `GET /api/business-profiles/{profile_id}`
 - `PUT /api/business-profiles/{profile_id}`
 - `POST /api/business-profiles/{profile_id}/actions/today`
@@ -109,12 +124,14 @@ MONEY
 
 ### Frontend
 
+- account auth screen with sign-up / login modes
 - onboarding form with editable business profile and weekly snapshot
 - local AsyncStorage save flow for the onboarding payload
 - dashboard hero with revenue focus mode
 - three action cards
 - margin summary panel
 - copy studio preview
+- account screen with plan selection and logout
 - edit/reset flow for the saved profile
 - live API fetch with demo fallback
 

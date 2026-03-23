@@ -20,6 +20,56 @@ def test_healthcheck():
     assert response.json() == {"status": "ok"}
 
 
+def test_signup_login_and_me():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Kim Builder",
+            "email": "kim@example.com",
+            "password": "supersecure123",
+        },
+    )
+
+    token = signup_response.json()["session_token"]
+    me_response = client.get("/api/auth/me", headers={"X-Session-Token": token})
+    login_response = client.post(
+        "/api/auth/login",
+        json={
+            "email": "kim@example.com",
+            "password": "supersecure123",
+        },
+    )
+
+    assert signup_response.status_code == 200
+    assert me_response.status_code == 200
+    assert me_response.json()["email"] == "kim@example.com"
+    assert login_response.status_code == 200
+
+
+def test_billing_checkout():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Plan Buyer",
+            "email": "buyer@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
+    plans_response = client.get("/api/billing/plans")
+    checkout_response = client.post(
+        "/api/billing/checkout",
+        json={"plan_id": "pro"},
+        headers={"X-Session-Token": token},
+    )
+
+    assert plans_response.status_code == 200
+    assert len(plans_response.json()) >= 3
+    assert checkout_response.status_code == 200
+    assert checkout_response.json()["plan_id"] == "pro"
+
+
 def test_daily_actions():
     response = client.post(
         "/api/actions/today",
@@ -49,6 +99,16 @@ def test_daily_actions():
 
 
 def test_profile_create_and_get():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Northwind Owner",
+            "email": "northwind@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
     create_response = client.post(
         "/api/business-profiles",
         json={
@@ -68,10 +128,14 @@ def test_profile_create_and_get():
                 "trend_delta": 0.08,
             },
         },
+        headers={"X-Session-Token": token},
     )
 
     created = create_response.json()
-    get_response = client.get(f"/api/business-profiles/{created['profile_id']}")
+    get_response = client.get(
+        f"/api/business-profiles/{created['profile_id']}",
+        headers={"X-Session-Token": token},
+    )
 
     assert create_response.status_code == 200
     assert get_response.status_code == 200
@@ -79,6 +143,16 @@ def test_profile_create_and_get():
 
 
 def test_profile_update():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Cash Garden Owner",
+            "email": "cashgarden@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
     create_response = client.post(
         "/api/business-profiles",
         json={
@@ -98,6 +172,7 @@ def test_profile_update():
                 "trend_delta": -0.05,
             },
         },
+        headers={"X-Session-Token": token},
     )
     profile_id = create_response.json()["profile_id"]
 
@@ -120,6 +195,7 @@ def test_profile_update():
                 "trend_delta": 0.1,
             },
         },
+        headers={"X-Session-Token": token},
     )
 
     assert update_response.status_code == 200
@@ -128,6 +204,16 @@ def test_profile_update():
 
 
 def test_recommendation_history_for_saved_profile():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Arcade Honey Owner",
+            "email": "arcade@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
     create_response = client.post(
         "/api/business-profiles",
         json={
@@ -147,11 +233,18 @@ def test_recommendation_history_for_saved_profile():
                 "trend_delta": -0.07,
             },
         },
+        headers={"X-Session-Token": token},
     )
     profile_id = create_response.json()["profile_id"]
 
-    actions_response = client.post(f"/api/business-profiles/{profile_id}/actions/today")
-    history_response = client.get(f"/api/business-profiles/{profile_id}/recommendations?limit=3")
+    actions_response = client.post(
+        f"/api/business-profiles/{profile_id}/actions/today",
+        headers={"X-Session-Token": token},
+    )
+    history_response = client.get(
+        f"/api/business-profiles/{profile_id}/recommendations?limit=3",
+        headers={"X-Session-Token": token},
+    )
 
     assert actions_response.status_code == 200
     assert history_response.status_code == 200

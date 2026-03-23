@@ -110,3 +110,40 @@ class RecommendationHistoryEntry(BaseModel):
     focus: str
     actions: list[ActionCard]
     created_at: datetime
+
+
+class AuthSignupRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=60)
+    email: str = Field(..., min_length=5, max_length=255)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class AuthLoginRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=255)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    plan_id: str
+    billing_status: str
+    renewal_date: datetime | None = None
+
+
+class AuthSessionResponse(BaseModel):
+    session_token: str
+    user: UserResponse
+
+
+class BillingPlanResponse(BaseModel):
+    id: str
+    name: str
+    price_monthly_krw: int
+    description: str
+    features: list[str]
+
+
+class BillingCheckoutRequest(BaseModel):
+    plan_id: str

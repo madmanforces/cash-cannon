@@ -12,21 +12,25 @@ import type { DashboardData } from '../types';
 
 type DashboardScreenProps = {
   dashboard: DashboardData;
+  planId: string;
   loading: boolean;
   refreshing: boolean;
   notice: string | null;
   onRefresh: () => void;
   onEdit: () => void;
+  onAccount: () => void;
   onReset: () => void;
 };
 
 export function DashboardScreen({
   dashboard,
+  planId,
   loading,
   refreshing,
   notice,
   onRefresh,
   onEdit,
+  onAccount,
   onReset,
 }: DashboardScreenProps) {
   return (
@@ -40,6 +44,7 @@ export function DashboardScreen({
           <Text style={styles.kicker}>MONEY BIZ</Text>
           <View style={styles.badges}>
             <Text style={styles.badge}>{dashboard.focus}</Text>
+            <Text style={styles.badgeMuted}>{planId.toUpperCase()}</Text>
             <Text style={styles.badgeMuted}>{dashboard.source === 'api' ? 'Synced API' : 'Local Fallback'}</Text>
           </View>
         </View>
@@ -67,6 +72,7 @@ export function DashboardScreen({
 
         <View style={styles.buttonRow}>
           <ActionButton label="Edit profile" onPress={onEdit} variant="secondary" />
+          <ActionButton label="Account" onPress={onAccount} variant="secondary" />
           <ActionButton label="Reset data" onPress={onReset} variant="ghost" />
         </View>
       </View>

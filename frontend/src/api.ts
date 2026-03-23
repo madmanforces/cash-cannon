@@ -1,5 +1,15 @@
 import { buildMockDashboard } from './mockData';
-import type { DashboardData, OnboardingPayload, SavedProfileRecord, SalesChannel, Tone } from './types';
+import type {
+  AuthSession,
+  AuthUser,
+  BillingPlan,
+  DashboardData,
+  OnboardingPayload,
+  PlanId,
+  SavedProfileRecord,
+  SalesChannel,
+  Tone,
+} from './types';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
@@ -42,16 +52,108 @@ type RecommendationHistoryApiResponse = Array<{
   }>;
 }>;
 
+type AuthApiResponse = {
+  session_token: string;
+  user: UserApiResponse;
+};
+
+type UserApiResponse = {
+  id: number;
+  full_name: string;
+  email: string;
+  plan_id: PlanId;
+  billing_status: string;
+  renewal_date: string | null;
+};
+
+type BillingPlanApiResponse = Array<{
+  id: PlanId;
+  name: string;
+  price_monthly_krw: number;
+  description: string;
+  features: string[];
+}>;
+
+export async function signUp(payload: {
+  fullName: string;
+  email: string;
+  password: string;
+}): Promise<AuthSession> {
+  const data = await fetchJson<AuthApiResponse>(`${API_BASE_URL}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      full_name: payload.fullName,
+      email: payload.email,
+      password: payload.password,
+    }),
+  });
+  return mapAuthSession(data);
+}
+
+
+export async function login(payload: {
+  email: string;
+  password: string;
+}): Promise<AuthSession> {
+  const data = await fetchJson<AuthApiResponse>(`${API_BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return mapAuthSession(data);
+}
+
+
+export async function fetchCurrentUser(sessionToken: string): Promise<AuthUser> {
+  const data = await fetchJson<UserApiResponse>(`${API_BASE_URL}/api/auth/me`, {
+    headers: withSessionToken(sessionToken),
+  });
+  return mapUser(data);
+}
+
+
+export async function logout(sessionToken: string) {
+  await fetchJson<{ status: string }>(`${API_BASE_URL}/api/auth/logout`, {
+    method: 'POST',
+    headers: withSessionToken(sessionToken),
+  });
+}
+
+
+export async function fetchPlans(): Promise<BillingPlan[]> {
+  const plans = await fetchJson<BillingPlanApiResponse>(`${API_BASE_URL}/api/billing/plans`);
+  return plans.map(mapPlan);
+}
+
+
+export async function checkoutPlan(sessionToken: string, planId: PlanId): Promise<AuthUser> {
+  const data = await fetchJson<UserApiResponse>(`${API_BASE_URL}/api/billing/checkout`, {
+    method: 'POST',
+    headers: {
+      ...withSessionToken(sessionToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ plan_id: planId }),
+  });
+  return mapUser(data);
+}
+
+
 export async function saveBusinessProfile(
   payload: OnboardingPayload,
   profileId: string | null,
+  sessionToken: string,
 ): Promise<SavedProfileRecord> {
   try {
     const data = await fetchJson<SavedProfileApiResponse>(
       profileId ? `${API_BASE_URL}/api/business-profiles/${profileId}` : `${API_BASE_URL}/api/business-profiles`,
       {
         method: profileId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...withSessionToken(sessionToken),
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(payload),
       },
     );
@@ -73,9 +175,31 @@ export async function saveBusinessProfile(
   }
 }
 
-export async function fetchBusinessProfile(profileId: string): Promise<OnboardingPayload | null> {
+
+export async function fetchLatestBusinessProfile(sessionToken: string): Promise<SavedProfileRecord | null> {
   try {
-    const data = await fetchJson<SavedProfileApiResponse>(`${API_BASE_URL}/api/business-profiles/${profileId}`);
+    const data = await fetchJson<SavedProfileApiResponse>(`${API_BASE_URL}/api/business-profiles/me/latest`, {
+      headers: withSessionToken(sessionToken),
+    });
+    return {
+      profileId: data.profile_id,
+      payload: {
+        profile: data.profile,
+        snapshot: data.snapshot,
+      },
+      source: 'api',
+    };
+  } catch {
+    return null;
+  }
+}
+
+
+export async function fetchBusinessProfile(profileId: string, sessionToken: string): Promise<OnboardingPayload | null> {
+  try {
+    const data = await fetchJson<SavedProfileApiResponse>(`${API_BASE_URL}/api/business-profiles/${profileId}`, {
+      headers: withSessionToken(sessionToken),
+    });
     return {
       profile: data.profile,
       snapshot: data.snapshot,
@@ -85,26 +209,33 @@ export async function fetchBusinessProfile(profileId: string): Promise<Onboardin
   }
 }
 
+
 export async function loadDashboard(
   payload: OnboardingPayload,
   profileId?: string | null,
+  sessionToken?: string | null,
 ): Promise<DashboardData> {
   try {
-    const actionRequest = profileId
-      ? fetchJson<DashboardApiResponse>(`${API_BASE_URL}/api/business-profiles/${profileId}/actions/today`, {
-          method: 'POST',
-        })
-      : fetchJson<DashboardApiResponse>(`${API_BASE_URL}/api/actions/today`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+    const authenticatedHeaders = sessionToken ? withSessionToken(sessionToken) : undefined;
+    const actionRequest =
+      profileId && authenticatedHeaders
+        ? fetchJson<DashboardApiResponse>(`${API_BASE_URL}/api/business-profiles/${profileId}/actions/today`, {
+            method: 'POST',
+            headers: authenticatedHeaders,
+          })
+        : fetchJson<DashboardApiResponse>(`${API_BASE_URL}/api/actions/today`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
 
-    const historyRequest = profileId
-      ? fetchJson<RecommendationHistoryApiResponse>(
-          `${API_BASE_URL}/api/business-profiles/${profileId}/recommendations?limit=4`,
-        )
-      : Promise.resolve([]);
+    const historyRequest =
+      profileId && authenticatedHeaders
+        ? fetchJson<RecommendationHistoryApiResponse>(
+            `${API_BASE_URL}/api/business-profiles/${profileId}/recommendations?limit=4`,
+            { headers: authenticatedHeaders },
+          )
+        : Promise.resolve([]);
 
     const [health, actions, margin, copies, history] = await Promise.all([
       fetchJson<{ status: string }>(`${API_BASE_URL}/health`),
@@ -165,6 +296,7 @@ export async function loadDashboard(
   }
 }
 
+
 function createMarginInput(payload: OnboardingPayload) {
   const perOrderAdCost = payload.snapshot.weekly_orders
     ? Math.round(payload.snapshot.ad_cost / payload.snapshot.weekly_orders)
@@ -184,6 +316,7 @@ function createMarginInput(payload: OnboardingPayload) {
   };
 }
 
+
 function createCopyInput(payload: OnboardingPayload): {
   business_name: string;
   offer: string;
@@ -200,6 +333,7 @@ function createCopyInput(payload: OnboardingPayload): {
   };
 }
 
+
 function inferFeeRate(channels: SalesChannel[]) {
   if (channels.includes('smart_store') || channels.includes('open_market')) {
     return 0.12;
@@ -209,6 +343,45 @@ function inferFeeRate(channels: SalesChannel[]) {
   }
   return 0.05;
 }
+
+
+function withSessionToken(sessionToken: string) {
+  return {
+    'X-Session-Token': sessionToken,
+  };
+}
+
+
+function mapAuthSession(data: AuthApiResponse): AuthSession {
+  return {
+    sessionToken: data.session_token,
+    user: mapUser(data.user),
+  };
+}
+
+
+function mapUser(data: UserApiResponse): AuthUser {
+  return {
+    id: data.id,
+    fullName: data.full_name,
+    email: data.email,
+    planId: data.plan_id,
+    billingStatus: data.billing_status,
+    renewalDate: data.renewal_date,
+  };
+}
+
+
+function mapPlan(data: BillingPlanApiResponse[number]): BillingPlan {
+  return {
+    id: data.id,
+    name: data.name,
+    priceMonthlyKrw: data.price_monthly_krw,
+    description: data.description,
+    features: data.features,
+  };
+}
+
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);

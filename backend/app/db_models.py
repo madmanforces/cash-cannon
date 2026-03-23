@@ -16,6 +16,7 @@ class BusinessProfileRecord(Base):
     __tablename__ = "business_profiles"
 
     profile_id: Mapped[str] = mapped_column(String(12), primary_key=True)
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     business_name: Mapped[str] = mapped_column(String(60), nullable=False)
     business_type: Mapped[str] = mapped_column(String(32), nullable=False)
     channels: Mapped[list[str]] = mapped_column(JSON, nullable=False)
@@ -34,6 +35,7 @@ class BusinessProfileRecord(Base):
         back_populates="profile",
         cascade="all, delete-orphan",
     )
+    owner: Mapped["UserRecord | None"] = relationship(back_populates="profiles")
 
 
 class RecommendationHistoryRecord(Base):
@@ -51,3 +53,35 @@ class RecommendationHistoryRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     profile: Mapped[BusinessProfileRecord] = relationship(back_populates="recommendations")
+
+
+class UserRecord(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    full_name: Mapped[str] = mapped_column(String(60), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    plan_id: Mapped[str] = mapped_column(String(32), nullable=False, default="free")
+    billing_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    renewal_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    sessions: Mapped[list["SessionTokenRecord"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    profiles: Mapped[list[BusinessProfileRecord]] = relationship(back_populates="owner")
+
+
+class SessionTokenRecord(Base):
+    __tablename__ = "session_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    user: Mapped[UserRecord] = relationship(back_populates="sessions")

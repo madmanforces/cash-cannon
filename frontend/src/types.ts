@@ -1,6 +1,7 @@
 export type BusinessType = 'online_seller' | 'reservation' | 'creator';
 export type SalesChannel = 'smart_store' | 'instagram' | 'open_market' | 'kakao' | 'offline';
 export type Tone = 'bold' | 'warm' | 'concise';
+export type PlanId = 'free' | 'pro' | 'team';
 
 export type OnboardingPayload = {
   profile: {
@@ -88,4 +89,26 @@ export type SavedProfileRecord = {
   profileId: string | null;
   payload: OnboardingPayload;
   source: 'api' | 'local';
+};
+
+export type AuthUser = {
+  id: number;
+  fullName: string;
+  email: string;
+  planId: PlanId;
+  billingStatus: string;
+  renewalDate: string | null;
+};
+
+export type AuthSession = {
+  sessionToken: string;
+  user: AuthUser;
+};
+
+export type BillingPlan = {
+  id: PlanId;
+  name: string;
+  priceMonthlyKrw: number;
+  description: string;
+  features: string[];
 };
