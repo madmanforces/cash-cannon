@@ -71,6 +71,12 @@ Expo will open a browser window or print a local web URL in the terminal.
 3. Fill in the onboarding form and save the business profile.
 4. Open the dashboard and use the `Account` button to switch plans.
 
+### Current plan limits
+
+- `Free`: 1 synced business profile, 3 recommendation history snapshots
+- `Pro`: 3 synced business profiles, 15 recommendation history snapshots
+- `Team`: 10 synced business profiles, 50 recommendation history snapshots
+
 ### Local DB file
 
 After the backend starts, the local database file is created here by default:

@@ -20,12 +20,13 @@ from app.models import (
     SavedProfileResponse,
     UserResponse,
 )
-from app.plans import PLANS
+from app.plans import PLANS, get_history_limit, get_profile_limit
 from app.services import build_copy, build_daily_actions, calculate_margin
 from app.store import (
+    count_profiles_for_user,
     create_profile,
     get_latest_profile_for_user,
-    get_profile,
+    get_owned_profile,
     list_recommendations,
     record_recommendation,
     update_profile,
@@ -118,6 +119,8 @@ def create_business_profile(
     current_user: UserRecord = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> SavedProfileResponse:
+    if count_profiles_for_user(session, current_user.id) >= get_profile_limit(current_user.plan_id):
+        raise HTTPException(status_code=403, detail="Profile limit reached for the current plan")
     return create_profile(session, payload, owner_user_id=current_user.id)
 
 
@@ -138,7 +141,7 @@ def read_business_profile(
     current_user: UserRecord = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> SavedProfileResponse:
-    profile = get_profile(session, profile_id)
+    profile = get_owned_profile(session, profile_id, current_user.id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
@@ -151,6 +154,10 @@ def write_business_profile(
     current_user: UserRecord = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> SavedProfileResponse:
+    existing = get_owned_profile(session, profile_id, current_user.id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
     profile = update_profile(session, profile_id, payload, owner_user_id=current_user.id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -168,7 +175,7 @@ def stored_profile_actions(
     current_user: UserRecord = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> DailyActionResponse:
-    profile = get_profile(session, profile_id)
+    profile = get_owned_profile(session, profile_id, current_user.id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
 
@@ -185,10 +192,11 @@ def recommendation_history(
     current_user: UserRecord = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> list[RecommendationHistoryEntry]:
-    profile = get_profile(session, profile_id)
+    profile = get_owned_profile(session, profile_id, current_user.id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return list_recommendations(session, profile_id, limit=limit)
+    safe_limit = min(limit, get_history_limit(current_user.plan_id))
+    return list_recommendations(session, profile_id, limit=safe_limit)
 
 
 @app.post("/api/calculator/margin", response_model=MarginOutput)

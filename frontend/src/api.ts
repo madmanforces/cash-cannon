@@ -13,6 +13,16 @@ import type {
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
+export class ApiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 type SavedProfileApiResponse = {
   profile_id: string;
   profile: OnboardingPayload['profile'];
@@ -166,7 +176,10 @@ export async function saveBusinessProfile(
       },
       source: 'api',
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError && error.status && error.status < 500) {
+      throw error;
+    }
     return {
       profileId,
       payload,
@@ -386,7 +399,16 @@ function mapPlan(data: BillingPlanApiResponse[number]): BillingPlan {
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    let detail = `Request failed: ${response.status}`;
+    try {
+      const data = (await response.json()) as { detail?: string };
+      if (data.detail) {
+        detail = data.detail;
+      }
+    } catch {
+      // Ignore parse errors and keep generic message.
+    }
+    throw new ApiError(detail, response.status);
   }
   return (await response.json()) as T;
 }

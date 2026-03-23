@@ -70,6 +70,115 @@ def test_billing_checkout():
     assert checkout_response.json()["plan_id"] == "pro"
 
 
+def test_free_plan_profile_limit():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Limited User",
+            "email": "limit@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
+    first_response = client.post(
+        "/api/business-profiles",
+        json={
+            "profile": {
+                "business_name": "First Shop",
+                "business_type": "online_seller",
+                "channels": ["smart_store"],
+                "monthly_goal": 3000000,
+                "average_order_value": 25000,
+                "repeat_customer_rate": 0.21,
+            },
+            "snapshot": {
+                "weekly_revenue": 500000,
+                "weekly_orders": 15,
+                "ad_cost": 20000,
+                "coupon_cost": 5000,
+                "trend_delta": 0.03,
+            },
+        },
+        headers={"X-Session-Token": token},
+    )
+    second_response = client.post(
+        "/api/business-profiles",
+        json={
+            "profile": {
+                "business_name": "Second Shop",
+                "business_type": "reservation",
+                "channels": ["kakao"],
+                "monthly_goal": 4500000,
+                "average_order_value": 70000,
+                "repeat_customer_rate": 0.32,
+            },
+            "snapshot": {
+                "weekly_revenue": 900000,
+                "weekly_orders": 11,
+                "ad_cost": 15000,
+                "coupon_cost": 2000,
+                "trend_delta": 0.09,
+            },
+        },
+        headers={"X-Session-Token": token},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 403
+
+
+def test_user_cannot_read_another_users_profile():
+    owner_signup = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Owner A",
+            "email": "ownera@example.com",
+            "password": "supersecure123",
+        },
+    )
+    intruder_signup = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Owner B",
+            "email": "ownerb@example.com",
+            "password": "supersecure123",
+        },
+    )
+    owner_token = owner_signup.json()["session_token"]
+    intruder_token = intruder_signup.json()["session_token"]
+
+    create_response = client.post(
+        "/api/business-profiles",
+        json={
+            "profile": {
+                "business_name": "Private Shop",
+                "business_type": "online_seller",
+                "channels": ["instagram"],
+                "monthly_goal": 5000000,
+                "average_order_value": 33000,
+                "repeat_customer_rate": 0.12,
+            },
+            "snapshot": {
+                "weekly_revenue": 650000,
+                "weekly_orders": 17,
+                "ad_cost": 21000,
+                "coupon_cost": 9000,
+                "trend_delta": -0.04,
+            },
+        },
+        headers={"X-Session-Token": owner_token},
+    )
+
+    profile_id = create_response.json()["profile_id"]
+    forbidden_response = client.get(
+        f"/api/business-profiles/{profile_id}",
+        headers={"X-Session-Token": intruder_token},
+    )
+
+    assert forbidden_response.status_code == 404
+
+
 def test_daily_actions():
     response = client.post(
         "/api/actions/today",
@@ -250,6 +359,55 @@ def test_recommendation_history_for_saved_profile():
     assert history_response.status_code == 200
     assert len(history_response.json()) == 1
     assert history_response.json()[0]["focus"] == "Recovery mode"
+
+
+def test_free_plan_history_limit_is_enforced():
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "History User",
+            "email": "history@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
+    create_response = client.post(
+        "/api/business-profiles",
+        json={
+            "profile": {
+                "business_name": "History Shop",
+                "business_type": "online_seller",
+                "channels": ["instagram"],
+                "monthly_goal": 3200000,
+                "average_order_value": 22000,
+                "repeat_customer_rate": 0.17,
+            },
+            "snapshot": {
+                "weekly_revenue": 480000,
+                "weekly_orders": 14,
+                "ad_cost": 12000,
+                "coupon_cost": 4000,
+                "trend_delta": -0.02,
+            },
+        },
+        headers={"X-Session-Token": token},
+    )
+    profile_id = create_response.json()["profile_id"]
+
+    for _ in range(5):
+        client.post(
+            f"/api/business-profiles/{profile_id}/actions/today",
+            headers={"X-Session-Token": token},
+        )
+
+    history_response = client.get(
+        f"/api/business-profiles/{profile_id}/recommendations?limit=10",
+        headers={"X-Session-Token": token},
+    )
+
+    assert history_response.status_code == 200
+    assert len(history_response.json()) == 3
 
 
 def test_margin_calculator():

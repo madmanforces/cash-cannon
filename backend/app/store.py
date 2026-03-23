@@ -44,6 +44,14 @@ def create_profile(
     return _to_saved_profile(record)
 
 
+def count_profiles_for_user(session: Session, owner_user_id: int) -> int:
+    return len(
+        session.scalars(
+            select(BusinessProfileRecord.profile_id).where(BusinessProfileRecord.owner_user_id == owner_user_id)
+        ).all()
+    )
+
+
 def update_profile(
     session: Session,
     profile_id: str,
@@ -89,6 +97,22 @@ def get_latest_profile_for_user(session: Session, owner_user_id: int) -> SavedPr
 
 def get_profile(session: Session, profile_id: str) -> SavedProfileResponse | None:
     record = session.get(BusinessProfileRecord, profile_id)
+    if record is None:
+        return None
+    return _to_saved_profile(record)
+
+
+def get_owned_profile(
+    session: Session,
+    profile_id: str,
+    owner_user_id: int,
+) -> SavedProfileResponse | None:
+    record = session.scalar(
+        select(BusinessProfileRecord).where(
+            BusinessProfileRecord.profile_id == profile_id,
+            BusinessProfileRecord.owner_user_id == owner_user_id,
+        )
+    )
     if record is None:
         return None
     return _to_saved_profile(record)

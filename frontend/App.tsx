@@ -7,6 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   API_BASE_URL,
+  ApiError,
   checkoutPlan,
   fetchBusinessProfile,
   fetchCurrentUser,
@@ -48,6 +49,16 @@ import type {
 
 type Screen = 'booting' | 'auth' | 'onboarding' | 'dashboard' | 'account';
 type AuthMode = 'login' | 'signup';
+
+function buildPlanHint(planId: string) {
+  if (planId === 'free') {
+    return 'Free keeps 1 synced profile and the latest 3 recommendation snapshots.';
+  }
+  if (planId === 'pro') {
+    return 'Pro keeps up to 3 synced profiles and 15 recommendation snapshots.';
+  }
+  return 'Team keeps up to 10 synced profiles and 50 recommendation snapshots.';
+}
 
 export default function App() {
   useFonts({
@@ -167,8 +178,8 @@ export default function App() {
       setAuthPassword('');
       setNotice(authMode === 'signup' ? 'Account created. Continue with the business profile.' : 'Logged in successfully.');
       setScreen('onboarding');
-    } catch {
-      setNotice(authMode === 'signup' ? 'Could not create the account.' : 'Login failed. Check your credentials.');
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : authMode === 'signup' ? 'Could not create the account.' : 'Login failed. Check your credentials.');
     } finally {
       setAuthSubmitting(false);
     }
@@ -188,21 +199,26 @@ export default function App() {
     }
 
     setSaving(true);
-    const result = await saveBusinessProfile(payload, profileId, sessionToken);
-    await saveLocalProfile(result.payload, result.profileId);
-    await hydrateDashboard(result.payload, result.profileId, sessionToken);
+    try {
+      const result = await saveBusinessProfile(payload, profileId, sessionToken);
+      await saveLocalProfile(result.payload, result.profileId);
+      await hydrateDashboard(result.payload, result.profileId, sessionToken);
 
-    startTransition(() => {
-      setForm(payloadToFormState(result.payload));
-      setProfileId(result.profileId);
+      startTransition(() => {
+        setForm(payloadToFormState(result.payload));
+        setProfileId(result.profileId);
+        setSaving(false);
+        setScreen('dashboard');
+        setNotice(
+          result.source === 'api'
+            ? 'Profile saved and synced with the backend.'
+            : 'API unavailable, so the profile was saved locally only.',
+        );
+      });
+    } catch (error) {
       setSaving(false);
-      setScreen('dashboard');
-      setNotice(
-        result.source === 'api'
-          ? 'Profile saved and synced with the backend.'
-          : 'API unavailable, so the profile was saved locally only.',
-      );
-    });
+      setNotice(error instanceof ApiError ? error.message : 'Profile could not be saved.');
+    }
   }
 
   async function handleRefresh() {
@@ -226,8 +242,8 @@ export default function App() {
       setUser(updatedUser);
       await saveAuthSession({ sessionToken, user: updatedUser });
       setNotice(`Plan updated to ${updatedUser.planId.toUpperCase()}.`);
-    } catch {
-      setNotice('Plan change could not be completed.');
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : 'Plan change could not be completed.');
     } finally {
       setBillingLoading(false);
     }
@@ -345,6 +361,7 @@ export default function App() {
             <DashboardScreen
               dashboard={dashboard}
               planId={user.planId}
+              planHint={buildPlanHint(user.planId)}
               loading={loadingDashboard}
               refreshing={refreshing}
               notice={notice}

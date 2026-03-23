@@ -13,6 +13,7 @@ import type { DashboardData } from '../types';
 type DashboardScreenProps = {
   dashboard: DashboardData;
   planId: string;
+  planHint: string;
   loading: boolean;
   refreshing: boolean;
   notice: string | null;
@@ -25,6 +26,7 @@ type DashboardScreenProps = {
 export function DashboardScreen({
   dashboard,
   planId,
+  planHint,
   loading,
   refreshing,
   notice,
@@ -80,6 +82,7 @@ export function DashboardScreen({
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Today's 3 Actions</Text>
         <Text style={styles.sectionCopy}>The dashboard keeps recommendations tied to the saved profile.</Text>
+        <Text style={styles.planHint}>{planHint}</Text>
       </View>
 
       {loading ? (
@@ -344,6 +347,11 @@ const styles = StyleSheet.create({
   sectionCopy: {
     marginTop: 6,
     color: '#a7b7ca',
+    fontFamily: 'SpaceGrotesk_500Medium',
+  },
+  planHint: {
+    marginTop: 8,
+    color: '#ffbe9f',
     fontFamily: 'SpaceGrotesk_500Medium',
   },
   loadingCard: {
