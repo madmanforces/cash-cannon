@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -84,7 +85,7 @@ class CopyRequest(BaseModel):
     offer: str = Field(..., min_length=2, max_length=120)
     channel: SalesChannel
     tone: Tone = Tone.concise
-    action_hint: str = Field(default="재구매 유도")
+    action_hint: str = Field(default="repeat purchase")
 
 
 class CopyVariant(BaseModel):
@@ -94,3 +95,11 @@ class CopyVariant(BaseModel):
 
 class CopyResponse(BaseModel):
     variants: list[CopyVariant]
+
+
+class SavedProfileResponse(BaseModel):
+    profile_id: str
+    profile: BusinessProfile
+    snapshot: SalesSnapshot
+    created_at: datetime
+    updated_at: datetime

@@ -4,7 +4,6 @@ import math
 
 from app.models import (
     ActionCard,
-    BusinessProfile,
     CopyResponse,
     CopyVariant,
     DailyActionResponse,
@@ -24,13 +23,13 @@ def build_daily_actions(payload: OnboardingRequest) -> DailyActionResponse:
     if snapshot.trend_delta < 0:
         actions.append(
             ActionCard(
-                title="이번 주 하락 원인을 반영한 긴급 캠페인 실행",
-                reason="주간 매출이 감소 중이라 빠른 노출 회복 액션이 필요합니다.",
-                expected_impact="저관여 고객 유입과 즉시성 매출 회복",
+                title="Launch a recovery campaign today",
+                reason="Revenue is trending down, so the business needs a fast visibility reset.",
+                expected_impact="Short-term demand recovery and more top-of-funnel interest",
                 checklist=[
-                    "할인 대신 세트 상품 또는 보너스 혜택으로 구성 변경",
-                    "대표 채널에 오늘 안에 업로드할 홍보 문구 발행",
-                    "캠페인 반응을 24시간 안에 다시 점검",
+                    "Keep price intact and repackage the offer as a bundle or bonus",
+                    "Publish one strong campaign message on the top channel today",
+                    "Review response within 24 hours and adjust the angle quickly",
                 ],
             )
         )
@@ -38,13 +37,13 @@ def build_daily_actions(payload: OnboardingRequest) -> DailyActionResponse:
     if profile.repeat_customer_rate < 0.3:
         actions.append(
             ActionCard(
-                title="재구매 고객 리텐션 메시지 발송",
-                reason="반복 구매 비율이 낮아 재방문 유도가 우선입니다.",
-                expected_impact="광고비를 늘리지 않고 매출 회수율 개선",
+                title="Send a repeat-purchase retention message",
+                reason="Repeat purchase rate is low, so retention should come before new acquisition.",
+                expected_impact="Higher revenue recovery without increasing ad spend",
                 checklist=[
-                    "최근 30일 구매 고객군을 분리",
-                    "감사 메시지 + 기간 한정 혜택 문구 발송",
-                    "응답률이 높은 시간대에 1회 발송",
+                    "Segment customers who purchased in the last 30 days",
+                    "Send a thank-you message with a narrow, time-bound incentive",
+                    "Schedule the message for the best response window",
                 ],
             )
         )
@@ -53,13 +52,13 @@ def build_daily_actions(payload: OnboardingRequest) -> DailyActionResponse:
     if fee_burden > profile.average_order_value * max(snapshot.weekly_orders, 1) * 0.1:
         actions.append(
             ActionCard(
-                title="마진 방어를 위한 가격/혜택 구조 조정",
-                reason="광고와 쿠폰 비용 비중이 높아 순이익이 압박받고 있습니다.",
-                expected_impact="주문 수 유지와 마진율 개선의 균형 확보",
+                title="Adjust the price-to-benefit structure",
+                reason="Ad spend and coupon cost are squeezing contribution margin.",
+                expected_impact="Protect order volume while improving unit economics",
                 checklist=[
-                    "기본 가격은 유지하고 묶음 옵션을 추가",
-                    "광고 효율이 낮은 소재를 중단",
-                    "쿠폰은 신규 고객군에만 제한 적용",
+                    "Add a higher-value bundle before cutting the base price",
+                    "Pause low-efficiency ad creatives first",
+                    "Restrict coupons to first-time or reactivation segments",
                 ],
             )
         )
@@ -67,23 +66,23 @@ def build_daily_actions(payload: OnboardingRequest) -> DailyActionResponse:
     while len(actions) < 3:
         actions.append(
             ActionCard(
-                title="채널별 주간 콘텐츠 1건 예약",
-                reason="지속적인 노출은 단기 매출 하락 방어에 유효합니다.",
-                expected_impact="문의 증가와 브랜드 기억 강화",
+                title="Queue one channel-specific content asset",
+                reason="Consistent exposure helps stabilize demand and inquiry volume.",
+                expected_impact="More inbound interest and steadier weekly traffic",
                 checklist=[
-                    "후기 기반 메시지 1개 선정",
-                    "대표 이미지 또는 썸네일 1개 준비",
-                    "주 고객 활동 시간에 예약 발행",
+                    "Choose one customer proof point or review",
+                    "Pair it with one simple image or thumbnail",
+                    "Schedule it at the audience's most active time",
                 ],
             )
         )
 
     focus = (
-        "회복 모드"
+        "Recovery mode"
         if snapshot.trend_delta < 0
-        else "리텐션 모드"
+        else "Retention mode"
         if profile.repeat_customer_rate < 0.3
-        else "확장 모드"
+        else "Growth mode"
     )
     return DailyActionResponse(focus=focus, actions=actions[:3])
 
@@ -125,31 +124,31 @@ def calculate_margin(payload: MarginInput) -> MarginOutput:
 def build_copy(payload) -> CopyResponse:
     channel_name = _channel_label(payload.channel)
     tone_prefix = {
-        Tone.bold: "지금 바로 놓치면 아쉬운",
-        Tone.warm: "고객에게 부담 없이 다가가는",
-        Tone.concise: "짧고 바로 이해되는",
+        Tone.bold: "A sharp, urgent",
+        Tone.warm: "A customer-friendly",
+        Tone.concise: "A direct, lightweight",
     }[payload.tone]
 
     variants = [
         CopyVariant(
-            headline=f"{payload.business_name} {payload.offer}",
+            headline=f"{payload.business_name} | {payload.offer}",
             body=(
-                f"{tone_prefix} {channel_name}용 문구입니다. "
-                f"{payload.action_hint}에 초점을 맞춰 오늘 안에 바로 게시해 보세요."
+                f"{tone_prefix} {channel_name} message focused on {payload.action_hint}. "
+                f"Use this version when you want immediate action."
             ),
         ),
         CopyVariant(
-            headline=f"다시 찾게 만드는 {payload.offer}",
+            headline=f"Bring customers back with {payload.offer}",
             body=(
-                f"{payload.business_name}만의 강점을 한 문장으로 정리하고, "
-                f"'{payload.offer}' 혜택을 선명하게 보여 주세요."
+                f"Lead with the business benefit, name the offer clearly, "
+                f"and close with a simple call to action."
             ),
         ),
         CopyVariant(
-            headline=f"이번 주 반응을 끌어올릴 {payload.offer}",
+            headline=f"This week's conversion lift: {payload.offer}",
             body=(
-                f"{channel_name} 채널 특성상 첫 문장에서 혜택을 명확히 제시하고 "
-                f"마지막에는 행동 유도 문장을 넣는 편이 유리합니다."
+                f"For {channel_name}, put the value proposition in the first line "
+                f"and keep the last sentence action-oriented."
             ),
         ),
     ]
@@ -158,10 +157,10 @@ def build_copy(payload) -> CopyResponse:
 
 def _channel_label(channel: SalesChannel) -> str:
     labels = {
-        SalesChannel.smart_store: "스마트스토어",
-        SalesChannel.instagram: "인스타그램",
-        SalesChannel.open_market: "오픈마켓",
-        SalesChannel.kakao: "카카오",
-        SalesChannel.offline: "오프라인",
+        SalesChannel.smart_store: "Smart Store",
+        SalesChannel.instagram: "Instagram",
+        SalesChannel.open_market: "Open Market",
+        SalesChannel.kakao: "Kakao",
+        SalesChannel.offline: "Offline",
     }
     return labels[channel]

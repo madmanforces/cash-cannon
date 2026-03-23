@@ -1,8 +1,13 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.store import clear_profiles
 
 client = TestClient(app)
+
+
+def setup_function():
+    clear_profiles()
 
 
 def test_healthcheck():
@@ -36,8 +41,87 @@ def test_daily_actions():
 
     body = response.json()
     assert response.status_code == 200
-    assert body["focus"] == "회복 모드"
+    assert body["focus"] == "Recovery mode"
     assert len(body["actions"]) == 3
+
+
+def test_profile_create_and_get():
+    create_response = client.post(
+        "/api/business-profiles",
+        json={
+            "profile": {
+                "business_name": "Northwind Studio",
+                "business_type": "reservation",
+                "channels": ["instagram", "kakao"],
+                "monthly_goal": 4200000,
+                "average_order_value": 60000,
+                "repeat_customer_rate": 0.42,
+            },
+            "snapshot": {
+                "weekly_revenue": 1100000,
+                "weekly_orders": 18,
+                "ad_cost": 60000,
+                "coupon_cost": 20000,
+                "trend_delta": 0.08,
+            },
+        },
+    )
+
+    created = create_response.json()
+    get_response = client.get(f"/api/business-profiles/{created['profile_id']}")
+
+    assert create_response.status_code == 200
+    assert get_response.status_code == 200
+    assert get_response.json()["profile"]["business_name"] == "Northwind Studio"
+
+
+def test_profile_update():
+    create_response = client.post(
+        "/api/business-profiles",
+        json={
+            "profile": {
+                "business_name": "Cash Garden",
+                "business_type": "creator",
+                "channels": ["instagram"],
+                "monthly_goal": 3000000,
+                "average_order_value": 25000,
+                "repeat_customer_rate": 0.2,
+            },
+            "snapshot": {
+                "weekly_revenue": 500000,
+                "weekly_orders": 12,
+                "ad_cost": 30000,
+                "coupon_cost": 10000,
+                "trend_delta": -0.05,
+            },
+        },
+    )
+    profile_id = create_response.json()["profile_id"]
+
+    update_response = client.put(
+        f"/api/business-profiles/{profile_id}",
+        json={
+            "profile": {
+                "business_name": "Cash Garden",
+                "business_type": "creator",
+                "channels": ["instagram", "smart_store"],
+                "monthly_goal": 4500000,
+                "average_order_value": 28000,
+                "repeat_customer_rate": 0.33,
+            },
+            "snapshot": {
+                "weekly_revenue": 750000,
+                "weekly_orders": 19,
+                "ad_cost": 45000,
+                "coupon_cost": 12000,
+                "trend_delta": 0.1,
+            },
+        },
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["profile"]["monthly_goal"] == 4500000
+    assert update_response.json()["snapshot"]["weekly_orders"] == 19
 
 
 def test_margin_calculator():
@@ -66,10 +150,10 @@ def test_copy_generator():
         "/api/ai/copy",
         json={
             "business_name": "MONEY BIZ",
-            "offer": "재구매 고객 전용 쿠폰",
+            "offer": "repeat-purchase coupon",
             "channel": "instagram",
             "tone": "bold",
-            "action_hint": "재방문 유도",
+            "action_hint": "retention",
         },
     )
 

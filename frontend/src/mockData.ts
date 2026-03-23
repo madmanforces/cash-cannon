@@ -1,8 +1,8 @@
-import type { DashboardData } from './api';
+import type { DashboardData, OnboardingFormState, OnboardingPayload, SalesChannel } from './types';
 
-export const onboardingPayload = {
+export const defaultOnboardingPayload: OnboardingPayload = {
   profile: {
-    business_name: 'MONEY BIZ',
+    business_name: 'Money Biz Demo',
     business_type: 'online_seller',
     channels: ['smart_store', 'instagram'],
     monthly_goal: 5000000,
@@ -18,69 +18,234 @@ export const onboardingPayload = {
   },
 };
 
-export const mockDashboard: DashboardData = {
-  source: 'mock',
-  apiHealth: 'offline',
-  apiBaseUrl: 'http://127.0.0.1:8000',
-  syncedAt: '데모 데이터',
-  focus: '회복 모드',
-  actions: [
-    {
-      title: '이번 주 하락 원인을 반영한 긴급 캠페인 실행',
-      reason: '주간 매출이 감소 중이라 빠른 노출 회복 액션이 필요합니다.',
-      expectedImpact: '저관여 고객 유입과 즉시성 매출 회복',
+export const defaultFormState = payloadToFormState(defaultOnboardingPayload);
+
+export function payloadToFormState(payload: OnboardingPayload): OnboardingFormState {
+  return {
+    businessName: payload.profile.business_name,
+    businessType: payload.profile.business_type,
+    channels: payload.profile.channels,
+    monthlyGoal: String(payload.profile.monthly_goal),
+    averageOrderValue: String(payload.profile.average_order_value),
+    repeatCustomerRate: String(Math.round(payload.profile.repeat_customer_rate * 100)),
+    weeklyRevenue: String(payload.snapshot.weekly_revenue),
+    weeklyOrders: String(payload.snapshot.weekly_orders),
+    adCost: String(payload.snapshot.ad_cost),
+    couponCost: String(payload.snapshot.coupon_cost),
+    trendDelta: String(Math.round(payload.snapshot.trend_delta * 100)),
+  };
+}
+
+export function formStateToPayload(form: OnboardingFormState): {
+  payload: OnboardingPayload | null;
+  error: string | null;
+} {
+  const businessName = form.businessName.trim();
+  if (businessName.length < 2) {
+    return { payload: null, error: 'Business name must be at least 2 characters.' };
+  }
+
+  if (form.channels.length === 0) {
+    return { payload: null, error: 'Select at least one sales channel.' };
+  }
+
+  const monthlyGoal = parseInteger(form.monthlyGoal);
+  const averageOrderValue = parseInteger(form.averageOrderValue);
+  const weeklyRevenue = parseInteger(form.weeklyRevenue, true);
+  const weeklyOrders = parseInteger(form.weeklyOrders, true);
+  const adCost = parseInteger(form.adCost, true);
+  const couponCost = parseInteger(form.couponCost, true);
+  const repeatCustomerRate = parsePercentage(form.repeatCustomerRate);
+  const trendDelta = parsePercentage(form.trendDelta, -100, 500);
+
+  if (monthlyGoal <= 0) {
+    return { payload: null, error: 'Monthly goal must be greater than 0.' };
+  }
+
+  if (averageOrderValue <= 0) {
+    return { payload: null, error: 'Average order value must be greater than 0.' };
+  }
+
+  if (repeatCustomerRate === null) {
+    return { payload: null, error: 'Repeat purchase rate must be between 0 and 100.' };
+  }
+
+  if (trendDelta === null) {
+    return { payload: null, error: 'Trend delta must be between -100 and 500.' };
+  }
+
+  return {
+    payload: {
+      profile: {
+        business_name: businessName,
+        business_type: form.businessType,
+        channels: form.channels,
+        monthly_goal: monthlyGoal,
+        average_order_value: averageOrderValue,
+        repeat_customer_rate: repeatCustomerRate / 100,
+      },
+      snapshot: {
+        weekly_revenue: weeklyRevenue,
+        weekly_orders: weeklyOrders,
+        ad_cost: adCost,
+        coupon_cost: couponCost,
+        trend_delta: trendDelta / 100,
+      },
+    },
+    error: null,
+  };
+}
+
+export function buildMockDashboard(payload: OnboardingPayload, apiBaseUrl: string): DashboardData {
+  const focus =
+    payload.snapshot.trend_delta < 0
+      ? 'Recovery mode'
+      : payload.profile.repeat_customer_rate < 0.3
+        ? 'Retention mode'
+        : 'Growth mode';
+
+  return {
+    source: 'mock',
+    apiHealth: 'offline',
+    apiBaseUrl,
+    syncedAt: `${new Date().toLocaleString('ko-KR')} (local cache)`,
+    focus,
+    actions: buildFallbackActions(payload),
+    margin: buildFallbackMargin(payload),
+    copies: buildFallbackCopy(payload),
+    profile: {
+      businessName: payload.profile.business_name,
+      businessType: payload.profile.business_type,
+      monthlyGoal: payload.profile.monthly_goal,
+      repeatCustomerRate: payload.profile.repeat_customer_rate,
+      channels: payload.profile.channels,
+    },
+    snapshot: {
+      weeklyRevenue: payload.snapshot.weekly_revenue,
+      weeklyOrders: payload.snapshot.weekly_orders,
+      trendDelta: payload.snapshot.trend_delta,
+    },
+  };
+}
+
+function buildFallbackActions(payload: OnboardingPayload) {
+  const items = [];
+
+  if (payload.snapshot.trend_delta < 0) {
+    items.push({
+      title: 'Launch a fast recovery offer',
+      reason: 'Weekly revenue is down, so this week needs a visible campaign reset.',
+      expectedImpact: 'More near-term demand and faster inquiry recovery',
       checklist: [
-        '세트 상품 또는 보너스 혜택 구성 다시 잡기',
-        '대표 채널에 업로드할 오늘의 홍보 문구 준비',
-        '24시간 뒤 반응 수치를 다시 확인',
+        'Keep the base price and reframe the offer as a bundle',
+        'Publish one campaign asset on the strongest channel today',
+        'Check response after 24 hours and sharpen the hook',
       ],
-    },
-    {
-      title: '재구매 고객 리텐션 메시지 발송',
-      reason: '반복 구매 비율이 낮아 재방문 유도가 우선입니다.',
-      expectedImpact: '광고비를 늘리지 않고 매출 회수율 개선',
+    });
+  }
+
+  if (payload.profile.repeat_customer_rate < 0.3) {
+    items.push({
+      title: 'Reactivate recent buyers',
+      reason: 'Repeat purchase is weak, so retention is the cheapest revenue lever.',
+      expectedImpact: 'Higher repeat revenue without adding more ad spend',
       checklist: [
-        '최근 30일 구매 고객군 분리',
-        '감사 메시지와 한정 혜택 문구 발송',
-        '가장 반응이 좋은 시간대에 1회 발송',
+        'Segment customers who purchased in the last 30 days',
+        'Send a short thank-you message with one incentive',
+        'Track click or reply rate by channel',
       ],
+    });
+  }
+
+  items.push({
+    title: 'Tighten the margin structure',
+    reason: 'Ad and coupon costs should not grow faster than weekly revenue.',
+    expectedImpact: 'More stable contribution margin across each order',
+    checklist: [
+      'Move discounts from all users to selected segments',
+      'Pause one low-efficiency ad placement',
+      'Test a higher-ticket bundle against the base offer',
+    ],
+  });
+
+  return items.slice(0, 3);
+}
+
+function buildFallbackMargin(payload: OnboardingPayload) {
+  const salePrice = payload.profile.average_order_value;
+  const cost = Math.round(salePrice * 0.38);
+  const feeRate = inferFeeRate(payload.profile.channels);
+  const perOrderAdCost = payload.snapshot.weekly_orders
+    ? Math.round(payload.snapshot.ad_cost / payload.snapshot.weekly_orders)
+    : 0;
+  const perOrderCouponCost = payload.snapshot.weekly_orders
+    ? Math.round(payload.snapshot.coupon_cost / payload.snapshot.weekly_orders)
+    : 0;
+  const netProfit =
+    salePrice - cost - Math.round(salePrice * feeRate) - perOrderAdCost - perOrderCouponCost;
+
+  return {
+    netProfit,
+    marginRate: Number((netProfit / Math.max(salePrice, 1)).toFixed(4)),
+    breakEvenOrders: Math.max(Math.ceil(100000 / Math.max(netProfit, 1)), 0),
+    suggestedPrice: netProfit < salePrice * 0.22 ? Math.round(salePrice * 1.08) : salePrice,
+  };
+}
+
+function buildFallbackCopy(payload: OnboardingPayload) {
+  const primaryChannel = labelForChannel(payload.profile.channels[0] ?? 'instagram');
+  return [
+    {
+      headline: `${payload.profile.business_name} | win back repeat buyers`,
+      body: `Lead with one customer benefit and publish it first on ${primaryChannel}. Keep the call to action direct.`,
     },
     {
-      title: '마진 방어를 위한 가격/혜택 구조 조정',
-      reason: '광고와 쿠폰 비용 비중이 높아 순이익이 압박받고 있습니다.',
-      expectedImpact: '주문 수 유지와 마진율 개선의 균형 확보',
-      checklist: [
-        '기본 가격은 유지하고 묶음 옵션 추가',
-        '효율 낮은 광고 소재 중단',
-        '쿠폰은 신규 고객군 중심으로 재설계',
-      ],
-    },
-  ],
-  margin: {
-    netProfit: 7000,
-    marginRate: 0.28,
-    breakEvenOrders: 15,
-    suggestedPrice: 25000,
-  },
-  copies: [
-    {
-      headline: 'MONEY BIZ 재구매 고객 전용 쿠폰',
-      body: '지금 바로 놓치면 아쉬운 인스타그램용 문구입니다. 재방문 유도에 초점을 맞춰 오늘 안에 바로 게시해 보세요.',
+      headline: 'Turn this week into a stronger revenue cycle',
+      body: 'Show the offer in the first line, keep the body short, and make the next step obvious.',
     },
     {
-      headline: '다시 찾게 만드는 재구매 고객 전용 쿠폰',
-      body: 'MONEY BIZ만의 강점을 한 문장으로 정리하고, 혜택을 첫 줄에 분명하게 제시해 주세요.',
+      headline: 'Protect margin before chasing more traffic',
+      body: 'Frame the message around value, not discount depth, and use urgency sparingly.',
     },
-    {
-      headline: '이번 주 반응을 끌어올릴 재구매 고객 전용 쿠폰',
-      body: '첫 문장에서 혜택을 선명하게 보여주고 마지막 문장에는 행동 유도 표현을 넣는 편이 좋습니다.',
-    },
-  ],
-  profile: {
-    monthlyGoal: 5000000,
-    repeatCustomerRate: 0.18,
-  },
-  snapshot: {
-    weeklyRevenue: 800000,
-  },
-};
+  ];
+}
+
+function inferFeeRate(channels: SalesChannel[]) {
+  if (channels.includes('smart_store') || channels.includes('open_market')) {
+    return 0.12;
+  }
+  if (channels.includes('instagram')) {
+    return 0.07;
+  }
+  return 0.05;
+}
+
+function labelForChannel(channel: SalesChannel) {
+  const labels: Record<SalesChannel, string> = {
+    smart_store: 'Smart Store',
+    instagram: 'Instagram',
+    open_market: 'Open Market',
+    kakao: 'Kakao',
+    offline: 'Offline',
+  };
+  return labels[channel];
+}
+
+function parseInteger(value: string, allowZero = false) {
+  const normalized = Number.parseInt(value.replace(/[^\d-]/g, ''), 10);
+  if (Number.isNaN(normalized)) {
+    return allowZero ? 0 : -1;
+  }
+  if (!allowZero && normalized <= 0) {
+    return -1;
+  }
+  return Math.max(normalized, 0);
+}
+
+function parsePercentage(value: string, min = 0, max = 100) {
+  const normalized = Number.parseFloat(value.replace(/[^\d.-]/g, ''));
+  if (Number.isNaN(normalized) || normalized < min || normalized > max) {
+    return null;
+  }
+  return normalized;
+}

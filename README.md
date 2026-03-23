@@ -4,7 +4,8 @@ MONEY BIZ is an AI revenue action coach for solo operators and small businesses.
 The current prototype includes:
 
 - a FastAPI backend with action recommendation, margin calculator, and copy generation endpoints
-- an Expo mobile dashboard that consumes the API and falls back to demo data when the API is unavailable
+- an Expo mobile onboarding flow that saves the business profile locally and syncs it to the backend when available
+- an Expo mobile dashboard that consumes the saved profile and falls back to demo data when the API is unavailable
 - product strategy and monetization docs for the next build phases
 
 ## Quick Start
@@ -70,14 +71,20 @@ MONEY
 - `POST /api/calculator/margin`
 - `POST /api/ai/copy`
 - `POST /api/onboarding/profile`
+- `POST /api/business-profiles`
+- `GET /api/business-profiles/{profile_id}`
+- `PUT /api/business-profiles/{profile_id}`
 - `GET /health`
 
 ### Frontend
 
+- onboarding form with editable business profile and weekly snapshot
+- local AsyncStorage save flow for the onboarding payload
 - dashboard hero with revenue focus mode
 - three action cards
 - margin summary panel
 - copy studio preview
+- edit/reset flow for the saved profile
 - live API fetch with demo fallback
 
 ## Product Direction
