@@ -3,6 +3,7 @@ import type {
   AuthSession,
   AuthUser,
   BillingCheckoutSession,
+  BillingPortalSession,
   BillingPlan,
   DashboardData,
   OnboardingPayload,
@@ -73,7 +74,9 @@ type UserApiResponse = {
   full_name: string;
   email: string;
   plan_id: PlanId;
+  billing_provider: string;
   billing_status: string;
+  billing_portal_available: boolean;
   renewal_date: string | null;
 };
 
@@ -93,6 +96,11 @@ type BillingCheckoutApiResponse = {
   checkout_url: string | null;
   created_at?: string;
   completed_at?: string | null;
+};
+
+type BillingPortalApiResponse = {
+  provider: string;
+  url: string;
 };
 
 export async function signUp(payload: {
@@ -172,6 +180,14 @@ export async function fetchBillingCheckoutSession(
     },
   );
   return mapBillingCheckoutSession(data);
+}
+
+
+export async function openBillingPortal(sessionToken: string): Promise<BillingPortalSession> {
+  return fetchJson<BillingPortalApiResponse>(`${API_BASE_URL}/api/billing/customer-portal`, {
+    method: 'POST',
+    headers: withSessionToken(sessionToken),
+  });
 }
 
 
@@ -404,7 +420,9 @@ function mapUser(data: UserApiResponse): AuthUser {
     fullName: data.full_name,
     email: data.email,
     planId: data.plan_id,
+    billingProvider: data.billing_provider,
     billingStatus: data.billing_status,
+    billingPortalAvailable: data.billing_portal_available,
     renewalDate: data.renewal_date,
   };
 }

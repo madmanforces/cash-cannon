@@ -23,6 +23,7 @@ def create_user(session: Session, full_name: str, email: str, password: str) -> 
         email=normalized_email,
         password_hash=_hash_password(password),
         plan_id="free",
+        billing_provider="internal",
         billing_status="active",
     )
     session.add(user)
@@ -107,6 +108,8 @@ def _to_user_response(user: UserRecord) -> UserResponse:
         full_name=user.full_name,
         email=user.email,
         plan_id=user.plan_id,
+        billing_provider=user.billing_provider,
         billing_status=user.billing_status,
+        billing_portal_available=bool(user.stripe_customer_id),
         renewal_date=user.renewal_date,
     )

@@ -41,10 +41,28 @@ def get_db_session() -> Generator[Session, None, None]:
 
 def _run_lightweight_migrations() -> None:
     inspector = inspect(engine)
-    if "business_profiles" not in inspector.get_table_names():
-        return
+    table_names = inspector.get_table_names()
 
-    columns = {column["name"] for column in inspector.get_columns("business_profiles")}
-    if "owner_user_id" not in columns:
-        with engine.begin() as connection:
-            connection.execute(text("ALTER TABLE business_profiles ADD COLUMN owner_user_id INTEGER"))
+    if "business_profiles" in table_names:
+        columns = {column["name"] for column in inspector.get_columns("business_profiles")}
+        if "owner_user_id" not in columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE business_profiles ADD COLUMN owner_user_id INTEGER"))
+
+    if "users" in table_names:
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        user_column_statements = {
+            "billing_provider": "ALTER TABLE users ADD COLUMN billing_provider VARCHAR(32) NOT NULL DEFAULT 'internal'",
+            "stripe_customer_id": "ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(64)",
+            "stripe_subscription_id": "ALTER TABLE users ADD COLUMN stripe_subscription_id VARCHAR(64)",
+        }
+        for column_name, statement in user_column_statements.items():
+            if column_name not in user_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(statement))
+
+    if "billing_checkout_sessions" in table_names:
+        checkout_columns = {column["name"] for column in inspector.get_columns("billing_checkout_sessions")}
+        if "provider_reference" not in checkout_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE billing_checkout_sessions ADD COLUMN provider_reference VARCHAR(64)"))

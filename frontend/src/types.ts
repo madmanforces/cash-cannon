@@ -96,7 +96,9 @@ export type AuthUser = {
   fullName: string;
   email: string;
   planId: PlanId;
+  billingProvider: string;
   billingStatus: string;
+  billingPortalAvailable: boolean;
   renewalDate: string | null;
 };
 
@@ -123,4 +125,9 @@ export type BillingCheckoutSession = {
   checkoutUrl: string | null;
   createdAt: string | null;
   completedAt: string | null;
+};
+
+export type BillingPortalSession = {
+  provider: string;
+  url: string;
 };

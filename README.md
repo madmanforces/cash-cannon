@@ -50,6 +50,24 @@ Local browser origins such as http://localhost:8081 and http://127.0.0.1:8081 ar
 You can add extra origins with CORS_ALLOW_ORIGINS=http://example.com,http://another-host:3000
 ```
 
+Stripe local setup:
+
+```powershell
+$env:BILLING_PROVIDER="stripe"
+$env:FRONTEND_APP_URL="http://localhost:8081"
+$env:STRIPE_SECRET_KEY="sk_test_..."
+$env:STRIPE_WEBHOOK_SECRET="whsec_..."
+$env:STRIPE_PRICE_ID_PRO="price_..."
+$env:STRIPE_PRICE_ID_TEAM="price_..."
+.\.venv\Scripts\python -m uvicorn app.main:app --reload --app-dir backend
+```
+
+Forward Stripe webhooks locally with the Stripe CLI:
+
+```powershell
+stripe listen --forward-to http://127.0.0.1:8000/api/billing/webhooks/stripe
+```
+
 ## How To View It
 
 ### API docs
@@ -77,7 +95,8 @@ Expo will open a browser window or print a local web URL in the terminal.
 2. Create an account or log in.
 3. Fill in the onboarding form and save the business profile.
 4. Open the dashboard and use the `Account` button to switch plans.
-5. When you choose a paid plan, open the mock checkout page, approve the payment, then return to the account screen and press `Refresh Status`.
+5. When you choose a paid plan, open the provider checkout page, complete payment, then return to the account screen and press `Refresh Status`.
+6. If the account is Stripe-backed, use `Manage Billing` to open the Stripe customer portal for cancellation or downgrade.
 
 ### Current plan limits
 
@@ -125,7 +144,9 @@ MONEY
 - `GET /api/billing/plans`
 - `POST /api/billing/checkout`
 - `GET /api/billing/checkout-sessions/{session_id}`
+- `POST /api/billing/customer-portal`
 - `POST /api/billing/webhooks/mock`
+- `POST /api/billing/webhooks/stripe`
 - `GET /api/billing/mock/checkout/{session_id}`
 - `POST /api/billing/mock/checkout/{session_id}/complete`
 - `POST /api/billing/mock/checkout/{session_id}/cancel`
@@ -151,7 +172,8 @@ MONEY
 - margin summary panel
 - copy studio preview
 - account screen with plan selection and logout
-- mock checkout session card with open/refresh flow
+- provider checkout session card with open/refresh flow
+- Stripe customer portal button when the account is Stripe-backed
 - edit/reset flow for the saved profile
 - live API fetch with demo fallback
 

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
 from app.database import SessionLocal, init_db
@@ -59,6 +61,99 @@ def test_signup_login_and_me():
     assert me_response.status_code == 200
     assert me_response.json()["email"] == "kim@example.com"
     assert login_response.status_code == 200
+
+
+def test_stripe_checkout_when_provider_configured(monkeypatch):
+    monkeypatch.setenv("BILLING_PROVIDER", "stripe")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("STRIPE_PRICE_ID_PRO", "price_pro_123")
+    monkeypatch.setenv("FRONTEND_APP_URL", "http://localhost:8081")
+    monkeypatch.setattr(
+        "app.billing_provider.stripe.checkout.Session.create",
+        lambda **kwargs: SimpleNamespace(id="cs_test_123", url="https://checkout.stripe.com/c/pay/cs_test_123"),
+    )
+
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Stripe Buyer",
+            "email": "stripe-buyer@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+
+    checkout_response = client.post(
+        "/api/billing/checkout",
+        json={"plan_id": "pro"},
+        headers={"X-Session-Token": token},
+    )
+
+    assert checkout_response.status_code == 200
+    assert checkout_response.json()["provider"] == "stripe"
+    assert checkout_response.json()["status"] == "pending"
+    assert checkout_response.json()["checkout_url"] == "https://checkout.stripe.com/c/pay/cs_test_123"
+
+
+def test_stripe_webhook_completion_updates_plan_and_portal(monkeypatch):
+    monkeypatch.setenv("BILLING_PROVIDER", "stripe")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("STRIPE_PRICE_ID_PRO", "price_pro_123")
+    monkeypatch.setenv("FRONTEND_APP_URL", "http://localhost:8081")
+    monkeypatch.setattr(
+        "app.billing_provider.stripe.checkout.Session.create",
+        lambda **kwargs: SimpleNamespace(id="cs_test_456", url="https://checkout.stripe.com/c/pay/cs_test_456"),
+    )
+    monkeypatch.setattr(
+        "app.billing_provider.stripe.billing_portal.Session.create",
+        lambda **kwargs: SimpleNamespace(url="https://billing.stripe.com/p/session/test_portal"),
+    )
+
+    signup_response = client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Stripe Portal User",
+            "email": "stripe-portal@example.com",
+            "password": "supersecure123",
+        },
+    )
+    token = signup_response.json()["session_token"]
+    checkout_response = client.post(
+        "/api/billing/checkout",
+        json={"plan_id": "pro"},
+        headers={"X-Session-Token": token},
+    )
+    session_id = checkout_response.json()["session_id"]
+
+    webhook_response = client.post(
+        "/api/billing/webhooks/stripe",
+        json={
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_test_456",
+                    "client_reference_id": session_id,
+                    "customer": "cus_test_123",
+                    "subscription": "sub_test_123",
+                    "metadata": {
+                        "app_session_id": session_id,
+                        "plan_id": "pro",
+                    },
+                }
+            },
+        },
+    )
+    me_response = client.get("/api/auth/me", headers={"X-Session-Token": token})
+    portal_response = client.post("/api/billing/customer-portal", headers={"X-Session-Token": token})
+
+    assert webhook_response.status_code == 200
+    assert webhook_response.json()["status"] == "ok"
+    assert me_response.status_code == 200
+    assert me_response.json()["plan_id"] == "pro"
+    assert me_response.json()["billing_provider"] == "stripe"
+    assert me_response.json()["billing_portal_available"] is True
+    assert portal_response.status_code == 200
+    assert portal_response.json()["provider"] == "stripe"
 
 
 def test_billing_checkout():

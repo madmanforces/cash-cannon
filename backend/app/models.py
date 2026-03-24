@@ -128,7 +128,9 @@ class UserResponse(BaseModel):
     full_name: str
     email: str
     plan_id: str
+    billing_provider: str
     billing_status: str
+    billing_portal_available: bool = False
     renewal_date: datetime | None = None
 
 
@@ -170,3 +172,8 @@ class BillingSessionResponse(BaseModel):
 class BillingWebhookRequest(BaseModel):
     session_id: str
     event_type: str
+
+
+class BillingPortalResponse(BaseModel):
+    provider: str
+    url: str

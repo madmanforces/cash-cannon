@@ -15,6 +15,7 @@ import {
   fetchPlans,
   loadDashboard,
   login,
+  openBillingPortal,
   logout,
   saveBusinessProfile,
   signUp,
@@ -90,6 +91,18 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const billingState = params.get('billing');
+      if (billingState === 'stripe_success') {
+        setNotice('Stripe checkout returned. Open Account and refresh the billing status if needed.');
+      } else if (billingState === 'stripe_cancel') {
+        setNotice('Stripe checkout was canceled before completion.');
+      }
+      if (billingState) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
     bootstrap();
   }, []);
 
@@ -249,13 +262,17 @@ export default function App() {
       setNotice('Complete or cancel the current checkout before starting another plan change.');
       return;
     }
+    if (planId === 'free' && user.billingProvider === 'stripe' && user.planId !== 'free') {
+      setNotice('Use Manage Billing to downgrade or cancel a Stripe subscription.');
+      return;
+    }
 
     setBillingLoading(true);
     try {
       const nextCheckoutSession = await startBillingCheckout(sessionToken, planId);
       setCheckoutSession(nextCheckoutSession);
       setNotice(
-        `Checkout ready for ${nextCheckoutSession.planId.toUpperCase()}. Open the mock checkout page, complete it, then refresh the status here.`,
+        `Checkout ready for ${nextCheckoutSession.planId.toUpperCase()} via ${nextCheckoutSession.provider.toUpperCase()}. Open it, complete it, then refresh the status here.`,
       );
     } catch (error) {
       setNotice(error instanceof ApiError ? error.message : 'Plan change could not be completed.');
@@ -296,7 +313,7 @@ export default function App() {
       }
 
       if (refreshedSession.status === 'pending') {
-        setNotice('Checkout is still pending. Finish it in the mock billing tab, then refresh again.');
+        setNotice(`Checkout is still pending in ${refreshedSession.provider.toUpperCase()}. Finish it, then refresh again.`);
         return;
       }
 
@@ -311,6 +328,23 @@ export default function App() {
   function handleClearCheckout() {
     setCheckoutSession(null);
     setNotice('Checkout status was cleared from the account view.');
+  }
+
+  async function handleOpenBillingPortal() {
+    if (!sessionToken) {
+      return;
+    }
+
+    setBillingLoading(true);
+    try {
+      const portalSession = await openBillingPortal(sessionToken);
+      await Linking.openURL(portalSession.url);
+      setNotice(`Opened ${portalSession.provider.toUpperCase()} billing management.`);
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : 'Billing portal could not be opened.');
+    } finally {
+      setBillingLoading(false);
+    }
   }
 
   async function handleLogout() {
@@ -423,6 +457,7 @@ export default function App() {
               onBack={handleAccountBack}
               onSelectPlan={handlePlanSelect}
               onOpenCheckout={handleOpenCheckout}
+              onOpenBillingPortal={handleOpenBillingPortal}
               onRefreshCheckout={handleRefreshCheckout}
               onClearCheckout={handleClearCheckout}
               onLogout={handleLogout}

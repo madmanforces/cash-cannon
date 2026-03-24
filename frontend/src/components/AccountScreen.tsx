@@ -11,6 +11,7 @@ type AccountScreenProps = {
   onBack: () => void;
   onSelectPlan: (planId: PlanId) => void;
   onOpenCheckout: () => void;
+  onOpenBillingPortal: () => void;
   onRefreshCheckout: () => void;
   onClearCheckout: () => void;
   onLogout: () => void;
@@ -25,6 +26,7 @@ export function AccountScreen({
   onBack,
   onSelectPlan,
   onOpenCheckout,
+  onOpenBillingPortal,
   onRefreshCheckout,
   onClearCheckout,
   onLogout,
@@ -40,7 +42,13 @@ export function AccountScreen({
         <View style={styles.badgeRow}>
           <Text style={styles.badge}>{user.planId.toUpperCase()}</Text>
           <Text style={styles.badgeMuted}>{user.billingStatus}</Text>
+          <Text style={styles.badgeMuted}>{user.billingProvider.toUpperCase()}</Text>
         </View>
+        {user.billingProvider === 'stripe' && user.billingPortalAvailable ? (
+          <Pressable onPress={onOpenBillingPortal} style={styles.portalButton}>
+            <Text style={styles.portalButtonText}>Manage Billing</Text>
+          </Pressable>
+        ) : null}
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       </View>
 
@@ -182,6 +190,18 @@ const styles = StyleSheet.create({
     color: '#ffbe9f',
     lineHeight: 20,
     fontFamily: 'SpaceGrotesk_500Medium',
+  },
+  portalButton: {
+    alignSelf: 'flex-start',
+    marginTop: 14,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#9bf3d0',
+  },
+  portalButtonText: {
+    color: '#07111f',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
   checkoutPanel: {
     borderRadius: 24,

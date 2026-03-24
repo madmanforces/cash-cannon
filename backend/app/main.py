@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+import json
 import os
 import secrets
+from datetime import datetime, timezone
 from html import escape
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,18 +13,27 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.auth_store import authenticate_user, create_user, revoke_session
-from app.billing_provider import get_billing_provider
+from app.billing_provider import (
+    get_billing_provider,
+    get_frontend_app_url,
+    get_stripe_module,
+    get_stripe_webhook_secret,
+)
 from app.billing_store import (
     CHECKOUT_EVENT_CANCELED,
     CHECKOUT_EVENT_COMPLETED,
     apply_billing_webhook,
+    cancel_user_subscription,
+    complete_checkout_session,
     create_checkout_session,
     get_checkout_session,
+    get_checkout_session_by_provider_reference,
+    mark_user_subscription_state,
     to_checkout_response,
     to_session_response,
 )
 from app.database import get_db_session, init_db
-from app.db_models import UserRecord
+from app.db_models import BillingCheckoutSessionRecord, UserRecord
 from app.dependencies import get_current_user
 from app.models import (
     AuthLoginRequest,
@@ -28,6 +42,7 @@ from app.models import (
     BillingCheckoutRequest,
     BillingCheckoutResponse,
     BillingPlanResponse,
+    BillingPortalResponse,
     BillingSessionResponse,
     BillingWebhookRequest,
     CopyRequest,
@@ -112,7 +127,9 @@ def me(current_user: UserRecord = Depends(get_current_user)) -> UserResponse:
         full_name=current_user.full_name,
         email=current_user.email,
         plan_id=current_user.plan_id,
+        billing_provider=current_user.billing_provider,
         billing_status=current_user.billing_status,
+        billing_portal_available=bool(current_user.stripe_customer_id),
         renewal_date=current_user.renewal_date,
     )
 
@@ -139,16 +156,22 @@ def billing_checkout(
     session: Session = Depends(get_db_session),
 ) -> BillingCheckoutResponse:
     try:
-        provider = get_billing_provider("mock")
+        provider = get_billing_provider()
         session_id = secrets.token_hex(16)
-        checkout_url = provider.build_checkout_url(session_id, str(request.base_url).rstrip("/"))
+        provider_session = provider.create_checkout_session(
+            app_session_id=session_id,
+            plan_id=payload.plan_id,
+            user_email=current_user.email,
+            api_base_url=str(request.base_url).rstrip("/"),
+        )
         checkout = create_checkout_session(
             session,
             session_id=session_id,
             user_id=current_user.id,
             provider=provider.provider_id,
+            provider_reference=provider_session.provider_reference,
             plan_id=payload.plan_id,
-            checkout_url=checkout_url,
+            checkout_url=provider_session.checkout_url,
         )
         return to_checkout_response(checkout)
     except ValueError as exc:
@@ -167,6 +190,25 @@ def billing_checkout_session(
     return to_session_response(checkout)
 
 
+@app.post("/api/billing/customer-portal", response_model=BillingPortalResponse)
+def billing_customer_portal(
+    current_user: UserRecord = Depends(get_current_user),
+) -> BillingPortalResponse:
+    if not current_user.stripe_customer_id:
+        raise HTTPException(status_code=400, detail="Stripe customer portal is not available for this account")
+
+    try:
+        provider = get_billing_provider("stripe")
+        portal_session = provider.create_customer_portal_session(
+            customer_id=current_user.stripe_customer_id,
+            return_url=get_frontend_app_url(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return BillingPortalResponse(provider=provider.provider_id, url=portal_session.url)
+
+
 @app.post("/api/billing/webhooks/mock", response_model=BillingSessionResponse)
 def mock_billing_webhook(
     payload: BillingWebhookRequest,
@@ -179,6 +221,15 @@ def mock_billing_webhook(
         status_code = 404 if message == "Checkout session not found" else 400
         raise HTTPException(status_code=status_code, detail=message) from exc
     return to_session_response(checkout)
+
+
+@app.post("/api/billing/webhooks/stripe")
+async def stripe_billing_webhook(
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> dict[str, str]:
+    event = await _parse_stripe_event(request)
+    return _apply_stripe_event(session, event)
 
 
 @app.get("/api/billing/mock/checkout/{session_id}", response_class=HTMLResponse)
@@ -309,6 +360,92 @@ def ai_copy(payload: CopyRequest):
     return build_copy(payload)
 
 
+async def _parse_stripe_event(request: Request) -> dict[str, Any]:
+    payload = await request.body()
+    webhook_secret = get_stripe_webhook_secret()
+
+    if webhook_secret:
+        stripe_module = get_stripe_module()
+        signature = request.headers.get("Stripe-Signature")
+        if not signature:
+            raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
+        try:
+            event = stripe_module.Webhook.construct_event(payload=payload, sig_header=signature, secret=webhook_secret)
+        except Exception as exc:  # pragma: no cover - Stripe validates signatures internally
+            raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature") from exc
+        return event.to_dict_recursive() if hasattr(event, "to_dict_recursive") else dict(event)
+
+    try:
+        return json.loads(payload.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid Stripe webhook payload") from exc
+
+
+def _apply_stripe_event(session: Session, event: dict[str, Any]) -> dict[str, str]:
+    event_type = str(event.get("type", ""))
+    data = event.get("data", {})
+    data_object = data.get("object", {}) if isinstance(data, dict) else {}
+    if not isinstance(data_object, dict):
+        return {"status": "ignored", "event_type": event_type}
+
+    if event_type == "checkout.session.completed":
+        local_session_id = _read_stripe_metadata_value(data_object, "app_session_id") or _as_string(
+            data_object.get("client_reference_id")
+        )
+        provider_reference = _as_string(data_object.get("id"))
+        checkout = (
+            get_checkout_session(session, local_session_id) if local_session_id else None
+        ) or (
+            get_checkout_session_by_provider_reference(
+                session,
+                provider="stripe",
+                provider_reference=provider_reference,
+            )
+            if provider_reference
+            else None
+        )
+        if checkout is None:
+            raise HTTPException(status_code=404, detail="Checkout session not found")
+
+        complete_checkout_session(
+            session,
+            checkout,
+            billing_provider="stripe",
+            stripe_customer_id=_as_string(data_object.get("customer")),
+            stripe_subscription_id=_as_string(data_object.get("subscription")),
+        )
+        return {"status": "ok", "event_type": event_type}
+
+    if event_type == "invoice.paid":
+        mark_user_subscription_state(
+            session,
+            stripe_customer_id=_as_string(data_object.get("customer")),
+            stripe_subscription_id=_as_string(data_object.get("subscription")),
+            billing_status="active",
+            renewal_date=_extract_invoice_period_end(data_object),
+        )
+        return {"status": "ok", "event_type": event_type}
+
+    if event_type == "invoice.payment_failed":
+        mark_user_subscription_state(
+            session,
+            stripe_customer_id=_as_string(data_object.get("customer")),
+            stripe_subscription_id=_as_string(data_object.get("subscription")),
+            billing_status="past_due",
+        )
+        return {"status": "ok", "event_type": event_type}
+
+    if event_type == "customer.subscription.deleted":
+        cancel_user_subscription(
+            session,
+            stripe_customer_id=_as_string(data_object.get("customer")),
+            stripe_subscription_id=_as_string(data_object.get("id")),
+        )
+        return {"status": "ok", "event_type": event_type}
+
+    return {"status": "ignored", "event_type": event_type}
+
+
 def _apply_mock_checkout_event(session: Session, session_id: str, event_type: str) -> HTMLResponse:
     try:
         checkout = apply_billing_webhook(session, BillingWebhookRequest(session_id=session_id, event_type=event_type))
@@ -362,13 +499,17 @@ def _apply_mock_checkout_event(session: Session, session_id: str, event_type: st
     return HTMLResponse(html)
 
 
-def _render_mock_checkout(checkout) -> str:
+def _render_mock_checkout(checkout: BillingCheckoutSessionRecord) -> str:
     plan = get_plan(checkout.plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail="Unknown plan")
 
     price = "Free" if plan.price_monthly_krw == 0 else f"KRW {plan.price_monthly_krw:,}/month"
-    status_line = "Complete the purchase to activate the plan." if checkout.status == "pending" else "This checkout session is already closed."
+    status_line = (
+        "Complete the purchase to activate the plan."
+        if checkout.status == "pending"
+        else "This checkout session is already closed."
+    )
     action_row = (
         f"""
         <div class="actions">
@@ -460,3 +601,35 @@ def _render_mock_checkout(checkout) -> str:
       </body>
     </html>
     """
+
+
+def _read_stripe_metadata_value(data_object: dict[str, Any], key: str) -> str | None:
+    metadata = data_object.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return None
+    return _as_string(metadata.get(key))
+
+
+def _as_string(value: Any) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _extract_invoice_period_end(invoice: dict[str, Any]) -> datetime | None:
+    lines = invoice.get("lines", {})
+    if not isinstance(lines, dict):
+        return None
+    data = lines.get("data", [])
+    if not isinstance(data, list) or not data:
+        return None
+    first_line = data[0]
+    if not isinstance(first_line, dict):
+        return None
+    period = first_line.get("period", {})
+    if not isinstance(period, dict):
+        return None
+    period_end = period.get("end")
+    if not isinstance(period_end, int):
+        return None
+    return datetime.fromtimestamp(period_end, tz=timezone.utc)
